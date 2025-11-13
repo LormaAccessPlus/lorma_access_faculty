@@ -40,8 +40,8 @@
             <nav class="flex space-x-8 px-6" aria-label="Tabs">
                 @foreach(['prelim', 'midterm', 'finals'] as $termKey)
                     <a href="{{ route('grades.term', ['subject' => $subject, 'term' => $termKey]) }}"
-                       class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {{ $term === $termKey ? 'text-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}"
-                       style="{{ $term === $termKey ? 'border-color: #08695A; background-color: #08695A; border-radius: 4px 4px 0 0;' : '' }}">
+                       class="py-4 px-4 border-b-2 font-medium text-sm transition-colors {{ $term === $termKey ? 'text-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}"
+                       style="{{ $term === $termKey ? 'border-color: #08695A; background-color: #08695A; border-radius: 8px 8px 0 0; margin-bottom: -1px;' : '' }}">
                         <span class="capitalize">{{ $termKey }}</span>
                         @if(isset($termProgress[$termKey]))
                             <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $termProgress[$termKey]['percentage'] == 100 ? 'bg-green-100 text-green-800' : ($termProgress[$termKey]['percentage'] > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800') }}">

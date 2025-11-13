@@ -8,6 +8,7 @@ use App\Models\GradeRecord;
 use App\Models\StudentMapping;
 use App\Models\TermGrade;
 use App\Services\GoogleClassroomService;
+use App\Services\GradeSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
@@ -17,10 +18,12 @@ use Illuminate\Support\Facades\Log;
 class GradeController extends Controller
 {
     private GoogleClassroomService $classroomService;
+    private GradeSyncService $gradeSyncService;
 
-    public function __construct(GoogleClassroomService $classroomService)
+    public function __construct(GoogleClassroomService $classroomService, GradeSyncService $gradeSyncService)
     {
         $this->classroomService = $classroomService;
+        $this->gradeSyncService = $gradeSyncService;
     }
     /**
      * Display the grade matrix for a subject
@@ -537,6 +540,101 @@ class GradeController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to import grades: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Sync grades to school database for a specific term
+     */
+    public function syncToSchoolDatabase(Request $request, Subject $subject): JsonResponse
+    {
+        try {
+            $request->validate([
+                'term' => 'required|in:prelim,midterm,finals'
+            ]);
+
+            $term = $request->term;
+
+            // Check if subject is mapped to school database
+            if (!$subject->school_schedule_code) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Subject is not mapped to school database.'
+                ], 422);
+            }
+
+            // Sync grades for this term
+            $results = $this->gradeSyncService->syncSubjectTermGrades($subject, $term);
+
+            if ($results['success'] > 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Successfully synced {$results['success']} grades to school database.",
+                    'results' => $results
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No grades were synced. Make sure students are mapped and grades are finalized.',
+                    'results' => $results
+                ], 422);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Failed to sync grades to school database', [
+                'subject_id' => $subject->id,
+                'term' => $request->term ?? 'unknown',
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync grades: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Sync all grades for a subject to school database
+     */
+    public function syncAllGradesToSchoolDatabase(Subject $subject): JsonResponse
+    {
+        try {
+            // Check if subject is mapped to school database
+            if (!$subject->school_schedule_code) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Subject is not mapped to school database.'
+                ], 422);
+            }
+
+            // Sync all grades
+            $results = $this->gradeSyncService->syncSubjectGrades($subject);
+
+            if ($results['success'] > 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Successfully synced {$results['success']} grades to school database.",
+                    'results' => $results
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No grades were synced. Make sure students are mapped and grades are finalized.',
+                    'results' => $results
+                ], 422);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Failed to sync all grades to school database', [
+                'subject_id' => $subject->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync grades: ' . $e->getMessage()
             ], 500);
         }
     }

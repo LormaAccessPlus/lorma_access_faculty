@@ -22,7 +22,7 @@
                 <!-- Logo -->
                 <div class="flex items-center justify-center h-16 px-4 text-white flex-shrink-0" style="background-color: #08695A;">
                     <i class="fas fa-graduation-cap text-2xl mr-3"></i>
-                    <h1 class="text-lg font-bold">Faculty Portal</h1>
+                    <h1 class="text-lg font-bold">Lorma Access+</h1>
                 </div>
                 
                 <!-- Navigation - Scrollable -->

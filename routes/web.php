@@ -12,6 +12,27 @@ Route::get('/auth/google', [GoogleAuthController::class, 'redirectToGoogle'])->n
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('auth.logout');
 
+// Development Login (REMOVE IN PRODUCTION!)
+if (app()->environment('local')) {
+    Route::get('/dev-login/{faculty_id?}', function ($facultyId = 1) {
+        $faculty = \App\Models\Faculty::find($facultyId);
+        
+        if (!$faculty) {
+            $faculties = \App\Models\Faculty::all(['id', 'name', 'email']);
+            return response()->json([
+                'error' => 'Faculty not found',
+                'available_faculties' => $faculties
+            ]);
+        }
+        
+        // Log in the faculty
+        auth('faculty')->login($faculty);
+        session(['faculty_id' => $faculty->id]);
+        
+        return redirect('/')->with('success', "Logged in as {$faculty->name}");
+    })->name('dev.login');
+}
+
 // Debug route (no auth required)
 Route::get('/debug-mapping', function () {
     $mappingService = app(\App\Services\SubjectMappingService::class);
