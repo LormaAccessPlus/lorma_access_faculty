@@ -9,6 +9,33 @@
     <p class="mt-1 text-sm text-gray-600">Here's what's happening with your courses today.</p>
 </div>
 
+<!-- School Database Link Warning -->
+@if(!$faculty->school_faculty_id)
+<div class="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+    <div class="flex items-start">
+        <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+        </div>
+        <div class="ml-3 flex-1">
+            <h3 class="text-sm font-medium text-yellow-800">Account Not Linked to School Database</h3>
+            <div class="mt-2 text-sm text-yellow-700">
+                <p>To sync subjects and students from the school database, you need to link your account to a teacher record.</p>
+            </div>
+            <div class="mt-4">
+                <a href="{{ route('faculty.link') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-yellow-800 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
+                    Link Account Now
+                    <svg class="ml-2 -mr-0.5 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 <!-- Main Navigation Cards -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
     <!-- Subjects -->

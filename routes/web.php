@@ -229,6 +229,11 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/get-term-grade', [App\Http\Controllers\GradeController::class, 'getTermGrade'])->name('get-term-grade');
         Route::post('/subjects/{subject}/import-from-classroom', [App\Http\Controllers\GradeController::class, 'importFromClassroom'])->name('import-from-classroom');
         
+        // Export Routes
+        Route::get('/subjects/{subject}/export/activities', [App\Http\Controllers\GradeController::class, 'exportActivities'])->name('export.activities');
+        Route::get('/subjects/{subject}/export/pp', [App\Http\Controllers\GradeController::class, 'exportPP'])->name('export.pp');
+        Route::get('/subjects/{subject}/export/term/{term}', [App\Http\Controllers\GradeController::class, 'exportTerm'])->name('export.term');
+        
         // Grade Synchronization Routes
         Route::post('/sync/test-connections', [App\Http\Controllers\GradeSyncController::class, 'testConnections'])->name('sync.test-connections');
     });

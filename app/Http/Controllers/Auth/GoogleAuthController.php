@@ -61,7 +61,10 @@ class GoogleAuthController extends Controller
             // Create or update faculty record
             $faculty = $this->createOrUpdateFaculty($googleUser);
             
-            // Store faculty ID in session
+            // Log in the faculty using Laravel's auth system
+            auth('faculty')->login($faculty);
+            
+            // Also store faculty ID in session for backward compatibility
             session(['faculty_id' => $faculty->id]);
             
             Log::info('Faculty logged in successfully: ' . $faculty->email);

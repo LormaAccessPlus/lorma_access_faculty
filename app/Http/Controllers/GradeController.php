@@ -638,4 +638,76 @@ class GradeController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Export Activities + Exam scores to PDF
+     */
+    public function exportActivities(Subject $subject)
+    {
+        $subject->load([
+            'activities' => function ($query) {
+                $query->orderBy('term')->orderBy('type')->orderBy('created_at');
+            },
+            'studentMappings' => function ($query) {
+                $query->orderBy('student_name');
+            }
+        ]);
+
+        $activitiesByTerm = $subject->activities->groupBy('term');
+        
+        $gradeRecords = GradeRecord::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })->with(['studentMapping', 'activity'])->get();
+
+        $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })->with('studentMapping')->get();
+
+        $pdf = \PDF::loadView('grades.exports.activities', compact('subject', 'activitiesByTerm', 'gradeRecords', 'termGrades'));
+        
+        return $pdf->download($subject->subject_code . '_Activities_Exam.pdf');
+    }
+
+    /**
+     * Export Grade (PP) - Computed grades in percentage
+     */
+    public function exportPP(Subject $subject)
+    {
+        $subject->load([
+            'studentMappings' => function ($query) {
+                $query->orderBy('student_name');
+            }
+        ]);
+
+        $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })->with('studentMapping')->get();
+
+        $pdf = \PDF::loadView('grades.exports.pp', compact('subject', 'termGrades'));
+        
+        return $pdf->download($subject->subject_code . '_Grades_PP.pdf');
+    }
+
+    /**
+     * Export Term-Based Grading to PDF
+     */
+    public function exportTerm(Subject $subject, string $term)
+    {
+        $subject->load([
+            'studentMappings' => function ($query) {
+                $query->orderBy('student_name');
+            }
+        ]);
+
+        $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })
+        ->where('term', $term)
+        ->with('studentMapping')
+        ->get();
+
+        $pdf = \PDF::loadView('grades.exports.term', compact('subject', 'term', 'termGrades'));
+        
+        return $pdf->download($subject->subject_code . '_' . ucfirst($term) . '_Grades.pdf');
+    }
 }
