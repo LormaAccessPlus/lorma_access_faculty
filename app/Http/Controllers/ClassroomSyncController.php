@@ -104,12 +104,27 @@ class ClassroomSyncController extends Controller
                 ], 422);
             }
 
-            // Update subject with GCR class ID
-            $subject->update(['gcr_class_id' => $request->gcr_class_id]);
+            // Authenticate and fetch course details to get the course state
+            if (!$this->classroomService->authenticateWithFaculty($faculty)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to authenticate with Google Classroom.'
+                ], 401);
+            }
+
+            $courses = $this->classroomService->getCourses();
+            $course = collect($courses)->firstWhere('id', $request->gcr_class_id);
+
+            // Update subject with GCR class ID and course state
+            $subject->update([
+                'gcr_class_id' => $request->gcr_class_id,
+                'gcr_course_state' => $course['course_state'] ?? 'ACTIVE'
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Subject successfully connected to Google Classroom course.'
+                'message' => 'Subject successfully connected to Google Classroom course.',
+                'course_state' => $course['course_state'] ?? 'ACTIVE'
             ]);
 
         } catch (\Exception $e) {

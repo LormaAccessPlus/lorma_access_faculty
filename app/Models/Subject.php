@@ -21,6 +21,7 @@ class Subject extends Model
         'semester',
         'gcr_class_id',
         'gcr_class_name',
+        'gcr_course_state',
         'school_subject_code',
         'school_subject_name',
         'school_schedule_code',
@@ -57,5 +58,15 @@ class Subject extends Model
     public function hasLaboratory(): bool
     {
         return $this->type === 'lecture_lab';
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->gcr_course_state === 'ARCHIVED';
+    }
+
+    public function isActive(): bool
+    {
+        return $this->gcr_course_state === 'ACTIVE' || $this->gcr_course_state === null;
     }
 }

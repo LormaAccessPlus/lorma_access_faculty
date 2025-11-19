@@ -30,6 +30,11 @@ class GradeController extends Controller
      */
     public function matrix(Subject $subject): View
     {
+        // Check if subject is archived
+        if ($subject->isArchived()) {
+            return view('grades.matrix-archived', compact('subject'));
+        }
+
         // Load subject with relationships
         $subject->load([
             'activities' => function ($query) {
@@ -66,6 +71,11 @@ class GradeController extends Controller
         $validTerms = ['prelim', 'midterm', 'finals'];
         if (!in_array($term, $validTerms)) {
             abort(404, 'Invalid term');
+        }
+
+        // Check if subject is archived
+        if ($subject->isArchived()) {
+            return view('grades.term-grades-archived', compact('subject', 'term'));
         }
 
         // Load subject with relationships
@@ -479,15 +489,28 @@ class GradeController extends Controller
                         $studentMapping = $studentMappings->firstWhere('gcr_student_id', $submission['user_id']);
                         
                         if (!$studentMapping) {
+                            Log::info('Student not found in mappings', [
+                                'gcr_student_id' => $submission['user_id'],
+                                'activity' => $activity->name
+                            ]);
                             continue; // Skip if student not found in mappings
                         }
 
                         // Get the grade (prefer assigned_grade over draft_grade)
                         $score = $submission['assigned_grade'] ?? $submission['draft_grade'] ?? null;
                         
+                        Log::info('Processing submission', [
+                            'student' => $studentMapping->student_name,
+                            'activity' => $activity->name,
+                            'draft_grade' => $submission['draft_grade'] ?? 'null',
+                            'assigned_grade' => $submission['assigned_grade'] ?? 'null',
+                            'final_score' => $score,
+                            'state' => $submission['state'] ?? 'unknown'
+                        ]);
+                        
                         if ($score !== null) {
                             // Create or update grade record
-                            GradeRecord::updateOrCreate(
+                            $gradeRecord = GradeRecord::updateOrCreate(
                                 [
                                     'student_mapping_id' => $studentMapping->id,
                                     'activity_id' => $activity->id,
@@ -495,11 +518,23 @@ class GradeController extends Controller
                                 [
                                     'score' => $score,
                                     'max_score' => $activity->max_score,
-                                    'percentage' => ($score / $activity->max_score) * 100,
+                                    'term' => $activity->term,
+                                    'created_by' => $faculty->id,
                                 ]
                             );
 
+                            Log::info('Grade record saved', [
+                                'grade_record_id' => $gradeRecord->id,
+                                'score' => $gradeRecord->score,
+                                'percentage' => $gradeRecord->percentage
+                            ]);
+
                             $importedCount++;
+                        } else {
+                            Log::info('No grade to import', [
+                                'student' => $studentMapping->student_name,
+                                'activity' => $activity->name
+                            ]);
                         }
                     }
 
