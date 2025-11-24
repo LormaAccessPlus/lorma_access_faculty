@@ -295,11 +295,6 @@
                                         <i class="fas fa-calendar-alt mr-1"></i>
                                         Term Grades
                                     </a>
-                                    <a href="{{ route('grades.sync.index', $subject) }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200">
-                                        <i class="fas fa-sync-alt mr-1"></i>
-                                        Grade Sync
-                                        <span class="ml-1 px-1 py-0.5 text-xs bg-orange-200 text-orange-800 rounded">New</span>
-                                    </a>
                                     <a href="{{ route('mappings.index', $subject) }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-orange-700 bg-orange-100 hover:bg-orange-200">
                                         <i class="fas fa-users mr-1"></i>
                                         Students ({{ $subject->studentMappings->count() }})
@@ -349,13 +344,6 @@
                     <i class="fas fa-tasks mr-2"></i>
                     Manage Activities
                 </a>
-                @if($recentSubjects->count() > 0)
-                <a href="{{ route('grades.sync.index', $recentSubjects->first()) }}" class="w-full flex items-center justify-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
-                    <i class="fas fa-sync-alt mr-2"></i>
-                    Grade Sync
-                    <span class="ml-2 px-2 py-0.5 text-xs bg-orange-200 text-orange-800 rounded-full">New</span>
-                </a>
-                @endif
             </div>
         </div>
 
@@ -487,14 +475,7 @@
                                 </div>
                             </div>
                             <div class="flex space-x-1">
-                                @if($recentSubjects->count() > 0)
-                                    <a href="{{ route('grades.sync.index', $recentSubjects->first()) }}" class="text-indigo-600 hover:text-indigo-500 text-xs" title="Grade Sync">
-                                        <i class="fas fa-database"></i>
-                                    </a>
-                                @endif
-                                <button onclick="testGradeConnections()" class="text-gray-600 hover:text-gray-500 text-xs" title="Test Connections">
-                                    <i class="fas fa-plug"></i>
-                                </button>
+
                             </div>
                         </div>
                     </div>

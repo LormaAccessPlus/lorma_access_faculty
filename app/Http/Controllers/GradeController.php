@@ -8,7 +8,6 @@ use App\Models\GradeRecord;
 use App\Models\StudentMapping;
 use App\Models\TermGrade;
 use App\Services\GoogleClassroomService;
-use App\Services\GradeSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
@@ -18,12 +17,10 @@ use Illuminate\Support\Facades\Log;
 class GradeController extends Controller
 {
     private GoogleClassroomService $classroomService;
-    private GradeSyncService $gradeSyncService;
 
-    public function __construct(GoogleClassroomService $classroomService, GradeSyncService $gradeSyncService)
+    public function __construct(GoogleClassroomService $classroomService)
     {
         $this->classroomService = $classroomService;
-        $this->gradeSyncService = $gradeSyncService;
     }
     /**
      * Display the grade matrix for a subject
@@ -114,6 +111,36 @@ class GradeController extends Controller
         // Calculate progress for each term
         $termProgress = $this->calculateTermProgress($subject);
 
+        // Get grading configuration for this term
+        $gradingConfig = \App\Models\GradingConfig::where('subject_id', $subject->id)
+            ->where('term', $term)
+            ->first();
+
+        // Get final rating configuration
+        $finalRatingConfig = $subject->final_rating_config ?? [
+            'prelim_weight' => 30,
+            'midterm_weight' => 30,
+            'finals_weight' => 40
+        ];
+
+        // Get all term grades for all periods for the calculator
+        $allTermGrades = TermGrade::where('subject_id', $subject->id)
+            ->with('studentMapping')
+            ->get()
+            ->groupBy('term');
+
+        // Get all activities for all terms
+        $allActivities = Activity::where('subject_id', $subject->id)
+            ->orderBy('term')
+            ->orderBy('type')
+            ->get()
+            ->groupBy('term');
+
+        // Get all grade records for all terms
+        $allGradeRecords = GradeRecord::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })->with(['studentMapping', 'activity'])->get();
+
         return view('grades.term-grades', compact(
             'subject', 
             'term', 
@@ -121,8 +148,102 @@ class GradeController extends Controller
             'labActivities', 
             'gradeMatrix', 
             'termGrades',
-            'termProgress'
+            'termProgress',
+            'gradingConfig',
+            'finalRatingConfig',
+            'allTermGrades',
+            'allActivities',
+            'allGradeRecords'
         ));
+    }
+
+    /**
+     * Save grading configuration
+     */
+    public function saveGradingConfig(Request $request, Subject $subject): JsonResponse
+    {
+        $request->validate([
+            'term' => 'required|in:prelim,midterm,finals',
+            'class_standing_weight' => 'required|numeric|min:0|max:100',
+            'exam_weight' => 'required|numeric|min:0|max:100',
+            'activity_weights' => 'nullable|array',
+            'activity_weights.*' => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        // Validate weights sum to 100
+        if ($request->class_standing_weight + $request->exam_weight != 100) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Class Standing and Exam weights must sum to 100%'
+            ], 422);
+        }
+
+        // Save grading configuration
+        \App\Models\GradingConfig::updateOrCreate(
+            [
+                'subject_id' => $subject->id,
+                'term' => $request->term,
+            ],
+            [
+                'class_standing_weight' => $request->class_standing_weight,
+                'exam_weight' => $request->exam_weight,
+                'formula_config' => $request->formula_config ?? [],
+            ]
+        );
+
+        // Save activity weights
+        if ($request->has('activity_weights')) {
+            foreach ($request->activity_weights as $activityId => $weight) {
+                Activity::where('id', $activityId)
+                    ->where('subject_id', $subject->id)
+                    ->update(['weight' => $weight]);
+            }
+        }
+
+        // Recalculate all term grades for this term with the new formula
+        $this->recalculateTermGradesForTerm($subject, $request->term, $request->class_standing_weight, $request->exam_weight);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Grading configuration saved and grades recalculated successfully'
+        ]);
+    }
+
+    /**
+     * Save final rating configuration
+     */
+    public function saveFinalRatingConfig(Request $request, Subject $subject): JsonResponse
+    {
+        $request->validate([
+            'prelim_weight' => 'required|numeric|min:0|max:100',
+            'midterm_weight' => 'required|numeric|min:0|max:100',
+            'finals_weight' => 'required|numeric|min:0|max:100',
+        ]);
+
+        // Validate weights sum to 100
+        $total = $request->prelim_weight + $request->midterm_weight + $request->finals_weight;
+        if ($total != 100) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Term weights must sum to 100%'
+            ], 422);
+        }
+
+        $subject->update([
+            'final_rating_config' => [
+                'prelim_weight' => $request->prelim_weight,
+                'midterm_weight' => $request->midterm_weight,
+                'finals_weight' => $request->finals_weight,
+            ]
+        ]);
+
+        // Recalculate final ratings for all students with the new weights
+        $this->recalculateFinalRatings($subject, $request->prelim_weight, $request->midterm_weight, $request->finals_weight);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Final rating configuration saved and final ratings recalculated successfully'
+        ]);
     }
 
     /**
@@ -317,23 +438,36 @@ class GradeController extends Controller
      */
     private function calculateTermGrade(TermGrade $termGrade): TermGrade
     {
-        $config = config('grading');
+        // Get grading configuration from database for this subject and term
+        $gradingConfig = \App\Models\GradingConfig::where('subject_id', $termGrade->subject_id)
+            ->where('term', $termGrade->term)
+            ->first();
+        
+        // Fallback to config file if no database config exists
+        if (!$gradingConfig) {
+            $config = config('grading');
+            $classWeight = $config[$termGrade->term]['class_weight'];
+            $examWeight = $config[$termGrade->term]['exam_weight'];
+        } else {
+            $classWeight = $gradingConfig->class_standing_weight / 100;
+            $examWeight = $gradingConfig->exam_weight / 100;
+        }
         
         if ($termGrade->term === 'prelim') {
-            // Prelim: Class standing percentage directly, exam grade = (score/100) * 100
+            // Prelim: Class standing percentage directly, exam grade = exam score
             $examGrade = $termGrade->exam_score;
-            $termGradeValue = ($termGrade->class_standing * $config['prelim']['class_weight']) + 
-                             ($examGrade * $config['prelim']['exam_weight']);
+            $termGradeValue = ($termGrade->class_standing * $classWeight) + 
+                             ($examGrade * $examWeight);
         } else {
-            // Midterm/Finals: Class standing = (score/items) × 50 + 50, exam grade = (score/items) × 50 + 50
+            // Midterm/Finals: Class standing already transformed, exam grade = (score/100) × 50 + 50
             $examGrade = ($termGrade->exam_score / 100) * 50 + 50;
-            $termGradeValue = ($termGrade->class_standing * $config['midterm']['class_weight']) + 
-                             ($examGrade * $config['midterm']['exam_weight']);
+            $termGradeValue = ($termGrade->class_standing * $classWeight) + 
+                             ($examGrade * $examWeight);
         }
 
         $termGrade->update([
-            'exam_grade' => round($examGrade, 2),
-            'term_grade' => round($termGradeValue, 2),
+            'exam_grade' => round($examGrade),
+            'term_grade' => round($termGradeValue),
         ]);
 
         return $termGrade->fresh();
@@ -380,7 +514,7 @@ class GradeController extends Controller
                 'term' => $term,
             ],
             [
-                'class_standing' => round($classStanding, 2),
+                'class_standing' => round($classStanding),
             ]
         );
 
@@ -580,101 +714,6 @@ class GradeController extends Controller
     }
 
     /**
-     * Sync grades to school database for a specific term
-     */
-    public function syncToSchoolDatabase(Request $request, Subject $subject): JsonResponse
-    {
-        try {
-            $request->validate([
-                'term' => 'required|in:prelim,midterm,finals'
-            ]);
-
-            $term = $request->term;
-
-            // Check if subject is mapped to school database
-            if (!$subject->school_schedule_code) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Subject is not mapped to school database.'
-                ], 422);
-            }
-
-            // Sync grades for this term
-            $results = $this->gradeSyncService->syncSubjectTermGrades($subject, $term);
-
-            if ($results['success'] > 0) {
-                return response()->json([
-                    'success' => true,
-                    'message' => "Successfully synced {$results['success']} grades to school database.",
-                    'results' => $results
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No grades were synced. Make sure students are mapped and grades are finalized.',
-                    'results' => $results
-                ], 422);
-            }
-
-        } catch (\Exception $e) {
-            Log::error('Failed to sync grades to school database', [
-                'subject_id' => $subject->id,
-                'term' => $request->term ?? 'unknown',
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to sync grades: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Sync all grades for a subject to school database
-     */
-    public function syncAllGradesToSchoolDatabase(Subject $subject): JsonResponse
-    {
-        try {
-            // Check if subject is mapped to school database
-            if (!$subject->school_schedule_code) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Subject is not mapped to school database.'
-                ], 422);
-            }
-
-            // Sync all grades
-            $results = $this->gradeSyncService->syncSubjectGrades($subject);
-
-            if ($results['success'] > 0) {
-                return response()->json([
-                    'success' => true,
-                    'message' => "Successfully synced {$results['success']} grades to school database.",
-                    'results' => $results
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No grades were synced. Make sure students are mapped and grades are finalized.',
-                    'results' => $results
-                ], 422);
-            }
-
-        } catch (\Exception $e) {
-            Log::error('Failed to sync all grades to school database', [
-                'subject_id' => $subject->id,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to sync grades: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
      * Export Activities + Exam scores to PDF
      */
     public function exportActivities(Subject $subject)
@@ -744,5 +783,83 @@ class GradeController extends Controller
         $pdf = \PDF::loadView('grades.exports.term', compact('subject', 'term', 'termGrades'));
         
         return $pdf->download($subject->subject_code . '_' . ucfirst($term) . '_Grades.pdf');
+    }
+
+    /**
+     * Recalculate all term grades for a specific term with new formula weights
+     */
+    private function recalculateTermGradesForTerm(Subject $subject, string $term, float $classStandingWeight, float $examWeight): void
+    {
+        // Get all term grades for this subject and term
+        $termGrades = TermGrade::where('subject_id', $subject->id)
+            ->where('term', $term)
+            ->whereNotNull('class_standing')
+            ->whereNotNull('exam_score')
+            ->get();
+
+        $classWeight = $classStandingWeight / 100;
+        $examWeightDecimal = $examWeight / 100;
+
+        foreach ($termGrades as $termGrade) {
+            // Recalculate exam grade based on term
+            if ($term === 'prelim') {
+                $examGrade = $termGrade->exam_score;
+            } else {
+                // Midterm/Finals: exam grade = (score/100) × 50 + 50
+                $examGrade = ($termGrade->exam_score / 100) * 50 + 50;
+            }
+
+            // Calculate new term grade with updated weights
+            $termGradeValue = ($termGrade->class_standing * $classWeight) + 
+                             ($examGrade * $examWeightDecimal);
+
+            $termGrade->update([
+                'exam_grade' => round($examGrade),
+                'term_grade' => round($termGradeValue),
+            ]);
+        }
+    }
+
+    /**
+     * Recalculate final ratings for all students with new term weights
+     */
+    private function recalculateFinalRatings(Subject $subject, float $prelimWeight, float $midtermWeight, float $finalsWeight): void
+    {
+        // Get all student mappings for this subject
+        $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
+
+        foreach ($studentMappings as $studentMapping) {
+            // Get term grades for this student
+            $prelimGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+                ->where('subject_id', $subject->id)
+                ->where('term', 'prelim')
+                ->first();
+
+            $midtermGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+                ->where('subject_id', $subject->id)
+                ->where('term', 'midterm')
+                ->first();
+
+            $finalsGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+                ->where('subject_id', $subject->id)
+                ->where('term', 'finals')
+                ->first();
+
+            // Only calculate if all term grades exist
+            if ($prelimGrade && $prelimGrade->term_grade !== null &&
+                $midtermGrade && $midtermGrade->term_grade !== null &&
+                $finalsGrade && $finalsGrade->term_grade !== null) {
+                
+                $finalRating = ($prelimGrade->term_grade * ($prelimWeight / 100)) +
+                              ($midtermGrade->term_grade * ($midtermWeight / 100)) +
+                              ($finalsGrade->term_grade * ($finalsWeight / 100));
+
+                // Update final rating in one of the term grades (or create a separate final rating record)
+                // For now, we'll store it in the finals term grade
+                $finalsGrade->update([
+                    'final_rating' => round($finalRating)
+                ]);
+            }
+        }
     }
 }

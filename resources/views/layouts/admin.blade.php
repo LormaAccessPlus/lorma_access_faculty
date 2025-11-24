@@ -81,154 +81,27 @@
                             </a>
                         </div>
                         
-                        <!-- Student Mappings -->
-                        <div class="space-y-1" x-data="{ open: false }">
-                            <button @click="open = !open" 
-                                    class="w-full flex items-center justify-between px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('mappings.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
-                                    style="{{ request()->routeIs('mappings.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
-                                    onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
-                                    onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
-                                <div class="flex items-center">
-                                    <i class="fas fa-users w-5 h-5 mr-3"></i>
-                                    <span class="font-medium">Student Mappings</span>
-                                </div>
-                                <i class="fas fa-chevron-down text-xs transition-transform" :class="{ 'rotate-180': open }"></i>
-                            </button>
-                            <div x-show="open" x-transition class="ml-8 space-y-1">
-                                @if($facultySubjects->count() > 0)
-                                    @foreach($facultySubjects as $subject)
-                                    <a href="{{ route('mappings.index', $subject) }}" 
-                                       class="flex items-center px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
-                                        <i class="fas fa-arrow-right w-3 h-3 mr-2"></i>
-                                        {{ $subject->subject_code }}
-                                    </a>
-                                    @endforeach
-                                    <a href="{{ route('subjects.index') }}" 
-                                       class="flex items-center px-4 py-2 text-xs text-gray-500 rounded-lg hover:bg-gray-50">
-                                        <i class="fas fa-list w-3 h-3 mr-2"></i>
-                                        View all subjects
-                                    </a>
-                                @else
-                                    <p class="px-4 py-2 text-xs text-gray-500">No subjects available</p>
-                                @endif
-                            </div>
-                        </div>
+                        <!-- Student Mapping -->
+                        <a href="{{ route('student-mapping.index') }}" 
+                           class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('student-mapping.*') || request()->routeIs('mappings.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
+                           style="{{ request()->routeIs('student-mapping.*') || request()->routeIs('mappings.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
+                           onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
+                           onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
+                            <i class="fas fa-users w-5 h-5 mr-3"></i>
+                            <span class="font-medium">Student Mapping</span>
+                        </a>
 
                         <!-- Grading System -->
-                        <div class="space-y-1" x-data="{ open: {{ request()->routeIs('grades.*') ? 'true' : 'false' }} }">
-                            <button @click="open = !open" 
-                                    class="w-full flex items-center justify-between px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('grades.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
-                                    style="{{ request()->routeIs('grades.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
-                                    onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
-                                    onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
-                                <div class="flex items-center">
-                                    <i class="fas fa-calculator w-5 h-5 mr-3"></i>
-                                    <span class="font-medium">Grading System</span>
-                                </div>
-                                <i class="fas fa-chevron-down text-xs transition-transform" :class="{ 'rotate-180': open }"></i>
-                            </button>
-                            <div x-show="open" x-transition class="ml-8 space-y-1">
-                                <!-- Debug: Show subject count -->
-                                <div class="px-4 py-1 text-xs text-gray-400">
-                                    Subjects: {{ isset($facultySubjects) ? $facultySubjects->count() : 'not set' }}
-                                </div>
-                                @if(isset($facultySubjects) && $facultySubjects->count() > 0)
-                                    <!-- Grade Matrix Submenu -->
-                                    <div class="space-y-1" x-data="{ matrixOpen: false }">
-                                        <button @click="matrixOpen = !matrixOpen" 
-                                                class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
-                                            <div class="flex items-center">
-                                                <i class="fas fa-table w-4 h-4 mr-2"></i>
-                                                <span>Grade Matrix</span>
-                                            </div>
-                                            <i class="fas fa-chevron-down text-xs transition-transform" :class="{ 'rotate-180': matrixOpen }"></i>
-                                        </button>
-                                        <div x-show="matrixOpen" x-transition class="ml-6 space-y-1">
-                                            @foreach($facultySubjects as $subject)
-                                            <a href="{{ route('grades.matrix', $subject) }}" 
-                                               class="flex items-center px-4 py-2 text-xs text-gray-600 rounded-lg hover:bg-gray-50">
-                                                <i class="fas fa-arrow-right w-3 h-3 mr-2"></i>
-                                                {{ $subject->subject_code }}
-                                            </a>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Term Grading Submenu -->
-                                    <div class="space-y-1" x-data="{ termOpen: false }">
-                                        <div class="flex items-center">
-                                            @if($facultySubjects->count() > 0)
-                                                <a href="{{ route('grades.term', $facultySubjects->first()) }}" 
-                                                   class="flex-1 flex items-center px-4 py-2 text-sm text-gray-600 rounded-l-lg hover:bg-gray-50">
-                                                    <i class="fas fa-calendar-alt w-4 h-4 mr-2"></i>
-                                                    <span>Term Grading</span>
-                                                </a>
-                                                <button @click="termOpen = !termOpen" 
-                                                        class="px-2 py-2 text-sm text-gray-600 rounded-r-lg hover:bg-gray-50 border-l border-gray-200">
-                                                    <i class="fas fa-chevron-down text-xs transition-transform" :class="{ 'rotate-180': termOpen }"></i>
-                                                </button>
-                                            @else
-                                                <button @click="termOpen = !termOpen" 
-                                                        class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
-                                                    <div class="flex items-center">
-                                                        <i class="fas fa-calendar-alt w-4 h-4 mr-2"></i>
-                                                        <span>Term Grading</span>
-                                                    </div>
-                                                    <i class="fas fa-chevron-down text-xs transition-transform" :class="{ 'rotate-180': termOpen }"></i>
-                                                </button>
-                                            @endif
-                                        </div>
-                                        <div x-show="termOpen" x-transition class="ml-6 space-y-1">
-                                            @foreach($facultySubjects as $subject)
-                                            <a href="{{ route('grades.term', $subject) }}" 
-                                               class="flex items-center px-4 py-2 text-xs text-gray-600 rounded-lg hover:bg-gray-50">
-                                                <i class="fas fa-arrow-right w-3 h-3 mr-2"></i>
-                                                {{ $subject->subject_code }}
-                                            </a>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Grade Synchronization Submenu -->
-                                    <div class="space-y-1" x-data="{ syncOpen: false }">
-                                        <button @click="syncOpen = !syncOpen" 
-                                                class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
-                                            <div class="flex items-center">
-                                                <i class="fas fa-sync-alt w-4 h-4 mr-2"></i>
-                                                <span>Grade Sync</span>
-                                                <span class="ml-2 px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded-full">New</span>
-                                            </div>
-                                            <i class="fas fa-chevron-down text-xs transition-transform" :class="{ 'rotate-180': syncOpen }"></i>
-                                        </button>
-                                        <div x-show="syncOpen" x-transition class="ml-6 space-y-1">
-                                            @foreach($facultySubjects as $subject)
-                                            <a href="{{ route('grades.sync.index', $subject) }}" 
-                                               class="flex items-center px-4 py-2 text-xs text-gray-600 rounded-lg hover:bg-gray-50">
-                                                <i class="fas fa-arrow-right w-3 h-3 mr-2"></i>
-                                                {{ $subject->subject_code }}
-                                            </a>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="border-t border-gray-100 pt-2">
-                                        <a href="{{ route('subjects.index') }}" 
-                                           class="flex items-center px-4 py-2 text-xs text-gray-500 rounded-lg hover:bg-gray-50">
-                                            <i class="fas fa-list w-3 h-3 mr-2"></i>
-                                            View all subjects
-                                        </a>
-                                    </div>
-                                @else
-                                    <p class="px-4 py-2 text-xs text-gray-500">
-                                        No subjects available 
-                                        @if(!isset($facultySubjects))
-                                            (facultySubjects not set)
-                                        @endif
-                                    </p>
-                                @endif
-                            </div>
-                        </div>
+                        <a href="{{ route('grading-system.index') }}" 
+                           class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('grading-system.*') || request()->routeIs('grades.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
+                           style="{{ request()->routeIs('grading-system.*') || request()->routeIs('grades.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
+                           onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
+                           onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
+                            <i class="fas fa-calculator w-5 h-5 mr-3"></i>
+                            <span class="font-medium">Grading System</span>
+                        </a>
                     </div>
+                    
                     
                     <!-- Divider -->
                     <div class="my-6 border-t border-gray-200"></div>
@@ -420,50 +293,6 @@
     
     <!-- Global JavaScript Functions -->
     <script>
-        // Test database connections
-        async function testGradeConnections() {
-            const statusElement = document.getElementById('db-status');
-            
-            // Show loading state
-            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500"></i>';
-            
-            try {
-                const response = await fetch('/grades/sync/test-connections', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    const appConnected = data.data.app_db.connected;
-                    const schoolConnected = data.data.school_db.connected;
-                    
-                    if (appConnected && schoolConnected) {
-                        statusElement.innerHTML = '<i class="fas fa-circle text-green-500" title="Both databases connected"></i>';
-                    } else if (appConnected || schoolConnected) {
-                        statusElement.innerHTML = '<i class="fas fa-circle text-yellow-500" title="Partial connection"></i>';
-                    } else {
-                        statusElement.innerHTML = '<i class="fas fa-circle text-red-500" title="Connection failed"></i>';
-                    }
-                } else {
-                    statusElement.innerHTML = '<i class="fas fa-circle text-red-500" title="Test failed"></i>';
-                }
-            } catch (error) {
-                statusElement.innerHTML = '<i class="fas fa-circle text-red-500" title="Test error"></i>';
-                console.error('Connection test failed:', error);
-            }
-        }
-        
-        // Auto-test connections on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Test connections after a short delay
-            setTimeout(testGradeConnections, 1000);
-        });
-        
         // Sidebar toggle functionality
         let sidebarHidden = false;
         

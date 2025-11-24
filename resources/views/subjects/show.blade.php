@@ -168,9 +168,6 @@
                     <a href="{{ route('mappings.index', $subject) }}" class="block w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition duration-200 text-center">
                         Manage Students
                     </a>
-                    <a href="{{ route('grades.sync.index', $subject) }}" class="block w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition duration-200 text-center">
-                        Grade Synchronization
-                    </a>
                     @if(!$subject->gcr_class_id)
                         <button class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition duration-200">
                             Connect GCR

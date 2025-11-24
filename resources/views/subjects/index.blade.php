@@ -65,10 +65,6 @@
                                     <i class="fas fa-calendar-alt mr-1"></i>
                                     Terms
                                 </a>
-                                <a href="{{ route('grades.sync.index', $subject) }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-indigo-700 bg-indigo-100 hover:bg-indigo-200">
-                                    <i class="fas fa-sync-alt mr-1"></i>
-                                    Sync
-                                </a>
                                 <a href="{{ route('mappings.index', $subject) }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-orange-700 bg-orange-100 hover:bg-orange-200">
                                     <i class="fas fa-users mr-1"></i>
                                     Students

@@ -17,6 +17,7 @@ class TermGrade extends Model
         'exam_score',
         'exam_grade',
         'term_grade',
+        'final_rating',
         'computation_config'
     ];
 
@@ -25,7 +26,8 @@ class TermGrade extends Model
         'class_standing' => 'decimal:2',
         'exam_score' => 'decimal:2',
         'exam_grade' => 'decimal:2',
-        'term_grade' => 'decimal:2'
+        'term_grade' => 'decimal:2',
+        'final_rating' => 'decimal:2'
     ];
 
     public function studentMapping(): BelongsTo

@@ -27,12 +27,14 @@ class Subject extends Model
         'school_schedule_code',
         'mapping_status',
         'student_mappings_count',
-        'mapping_notes'
+        'mapping_notes',
+        'final_rating_config'
     ];
 
     protected $casts = [
         'school_subject_id' => 'integer',
         'faculty_id' => 'integer',
+        'final_rating_config' => 'array',
     ];
 
     public function faculty(): BelongsTo

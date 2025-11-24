@@ -18,12 +18,6 @@
                    onmouseout="this.style.backgroundColor='#08695A';">
                     <i class="fas fa-table mr-2"></i>Full Matrix
                 </a>
-                <a href="{{ route('grades.sync.index', $subject) }}" class="text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                   style="background-color: #0A7B6A;"
-                   onmouseover="this.style.backgroundColor='#065A4A';"
-                   onmouseout="this.style.backgroundColor='#0A7B6A';">
-                    <i class="fas fa-sync-alt mr-2"></i>Grade Sync
-                </a>
                 <a href="{{ route('subjects.show', $subject) }}" class="px-4 py-2 rounded-lg font-medium transition-colors border"
                    style="border-color: #08695A; color: #08695A; background-color: white;"
                    onmouseover="this.style.backgroundColor='#08695A'; this.style.color='white';"
@@ -51,6 +45,275 @@
                     </a>
                 @endforeach
             </nav>
+        </div>
+
+        <!-- Grade Calculator Section -->
+        @include('grades._grading-calculator')
+
+        <!-- Old Configuration (Hidden for now) -->
+        <div class="p-6 border-b border-gray-200 bg-gray-50 hidden" x-data="{ 
+            showConfig: false,
+            showFinalConfig: false,
+            termConfig: {
+                class_standing_weight: {{ $gradingConfig->class_standing_weight ?? 40 }},
+                exam_weight: {{ $gradingConfig->exam_weight ?? 60 }}
+            },
+            finalConfig: {
+                prelim_weight: {{ $finalRatingConfig['prelim_weight'] ?? 30 }},
+                midterm_weight: {{ $finalRatingConfig['midterm_weight'] ?? 30 }},
+                finals_weight: {{ $finalRatingConfig['finals_weight'] ?? 40 }}
+            }
+        }">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                        <i class="fas fa-calculator mr-2" style="color: #08695A;"></i>
+                        Grading Formula Configuration
+                    </h3>
+                    <p class="text-sm text-gray-600 mt-1">Define how grades are computed for this term and overall</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button @click="showConfig = !showConfig" 
+                            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors border"
+                            :class="showConfig ? 'bg-white text-gray-700 border-gray-300' : 'text-white border-transparent'"
+                            :style="!showConfig ? 'background-color: #08695A;' : ''">
+                        <i class="fas fa-cog mr-2"></i>
+                        <span x-text="showConfig ? 'Hide Config' : 'Configure Term'"></span>
+                    </button>
+                    <button @click="showFinalConfig = !showFinalConfig" 
+                            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors border"
+                            :class="showFinalConfig ? 'bg-white text-gray-700 border-gray-300' : 'text-white border-transparent'"
+                            :style="!showFinalConfig ? 'background-color: #E67E22;' : ''">
+                        <i class="fas fa-trophy mr-2"></i>
+                        <span x-text="showFinalConfig ? 'Hide Final Config' : 'Configure Final Rating'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Current Configuration Display -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                        <i class="fas fa-calendar-alt mr-2 text-blue-600"></i>
+                        Current {{ ucfirst($term) }} Term Formula
+                    </h4>
+                    <div class="text-sm text-gray-600 space-y-1">
+                        <p><strong>Class Standing:</strong> <span x-text="termConfig.class_standing_weight"></span>%</p>
+                        <p><strong>Exam:</strong> <span x-text="termConfig.exam_weight"></span>%</p>
+                        <p class="text-xs text-gray-500 mt-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            @if($term === 'prelim')
+                                Prelim uses percentage: (Total Score / Total Possible) × 100
+                            @else
+                                Midterm/Finals use transmuted: (Score / Items) × 50 + 50
+                            @endif
+                        </p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                        <i class="fas fa-trophy mr-2 text-orange-600"></i>
+                        Final Rating Formula
+                    </h4>
+                    <div class="text-sm text-gray-600 space-y-1">
+                        <p><strong>Prelim:</strong> <span x-text="finalConfig.prelim_weight"></span>%</p>
+                        <p><strong>Midterm:</strong> <span x-text="finalConfig.midterm_weight"></span>%</p>
+                        <p><strong>Finals:</strong> <span x-text="finalConfig.finals_weight"></span>%</p>
+                        <p class="text-xs text-gray-500 mt-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Final Rating = (Prelim × <span x-text="finalConfig.prelim_weight"></span>%) + (Midterm × <span x-text="finalConfig.midterm_weight"></span>%) + (Finals × <span x-text="finalConfig.finals_weight"></span>%)
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Term Configuration Form -->
+            <div x-show="showConfig" x-cloak x-transition class="bg-white rounded-lg p-6 border border-gray-300 mb-4">
+                <h4 class="text-md font-semibold text-gray-900 mb-4">Configure {{ ucfirst($term) }} Term Grading</h4>
+                
+                <!-- Activity Weights Section -->
+                @if(isset($lectureActivities) && $lectureActivities->isNotEmpty() || isset($labActivities) && $labActivities->isNotEmpty())
+                <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h5 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                        <i class="fas fa-tasks mr-2 text-blue-600"></i>
+                        Activity Weights for Class Standing
+                    </h5>
+                    <p class="text-xs text-gray-600 mb-4">
+                        Set individual weights for each activity. Weights will be used to calculate the class standing component.
+                    </p>
+                    
+                    <div class="space-y-4">
+                        @if(isset($lectureActivities) && $lectureActivities->isNotEmpty())
+                        <div>
+                            <h6 class="text-xs font-semibold text-gray-700 mb-2 uppercase">Lecture Activities</h6>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                @foreach($lectureActivities as $activity)
+                                <div class="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-900">{{ $activity->name }}</p>
+                                        <p class="text-xs text-gray-500">Max: {{ $activity->max_score }}</p>
+                                    </div>
+                                    <div class="ml-3">
+                                        <input type="number" 
+                                               name="activity_weights[{{ $activity->id }}]"
+                                               value="{{ $activity->weight ?? 0 }}"
+                                               min="0"
+                                               max="100"
+                                               step="0.01"
+                                               class="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                                               placeholder="0">
+                                        <span class="text-xs text-gray-500 ml-1">%</span>
+                                    </div>
+                                </div>
+                                @endforeach
+                            </div>
+                        </div>
+                        @endif
+                        
+                        @if(isset($labActivities) && $labActivities->isNotEmpty())
+                        <div>
+                            <h6 class="text-xs font-semibold text-gray-700 mb-2 uppercase">Laboratory Activities</h6>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                @foreach($labActivities as $activity)
+                                <div class="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-900">{{ $activity->name }}</p>
+                                        <p class="text-xs text-gray-500">Max: {{ $activity->max_score }}</p>
+                                    </div>
+                                    <div class="ml-3">
+                                        <input type="number" 
+                                               name="activity_weights[{{ $activity->id }}]"
+                                               value="{{ $activity->weight ?? 0 }}"
+                                               min="0"
+                                               max="100"
+                                               step="0.01"
+                                               class="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                                               placeholder="0">
+                                        <span class="text-xs text-gray-500 ml-1">%</span>
+                                    </div>
+                                </div>
+                                @endforeach
+                            </div>
+                        </div>
+                        @endif
+                        
+                        <div class="pt-3 border-t border-blue-200">
+                            <p class="text-xs text-gray-600">
+                                <i class="fas fa-lightbulb mr-1 text-yellow-500"></i>
+                                <strong>Tip:</strong> If weights don't sum to 100%, they will be normalized automatically. Leave at 0 for equal weighting.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                @endif
+                
+                <form @submit.prevent="saveTermConfig" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Class Standing Weight (%)
+                            </label>
+                            <input type="number" 
+                                   x-model="termConfig.class_standing_weight" 
+                                   min="0" 
+                                   max="100" 
+                                   step="0.01"
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                   required>
+                            <p class="text-xs text-gray-500 mt-1">Weight of class standing in term grade</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Exam Weight (%)
+                            </label>
+                            <input type="number" 
+                                   x-model="termConfig.exam_weight" 
+                                   min="0" 
+                                   max="100" 
+                                   step="0.01"
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                   required>
+                            <p class="text-xs text-gray-500 mt-1">Weight of exam in term grade</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between pt-4 border-t">
+                        <p class="text-sm text-gray-600">
+                            Total: <span class="font-semibold" x-text="(parseFloat(termConfig.class_standing_weight) + parseFloat(termConfig.exam_weight)).toFixed(2)"></span>% 
+                            <span x-show="(parseFloat(termConfig.class_standing_weight) + parseFloat(termConfig.exam_weight)) !== 100" class="text-red-600 ml-2">
+                                <i class="fas fa-exclamation-triangle"></i> Must equal 100%
+                            </span>
+                        </p>
+                        <button type="submit" 
+                                class="px-6 py-2 text-white rounded-lg font-medium transition-colors"
+                                style="background-color: #08695A;"
+                                onmouseover="this.style.backgroundColor='#065A4A';"
+                                onmouseout="this.style.backgroundColor='#08695A';">
+                            <i class="fas fa-save mr-2"></i>Save Term Config
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Final Rating Configuration Form -->
+            <div x-show="showFinalConfig" x-cloak x-transition class="bg-white rounded-lg p-6 border border-gray-300">
+                <h4 class="text-md font-semibold text-gray-900 mb-4">Configure Final Rating Computation</h4>
+                <form @submit.prevent="saveFinalConfig" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Prelim Weight (%)
+                            </label>
+                            <input type="number" 
+                                   x-model="finalConfig.prelim_weight" 
+                                   min="0" 
+                                   max="100" 
+                                   step="0.01"
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                   required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Midterm Weight (%)
+                            </label>
+                            <input type="number" 
+                                   x-model="finalConfig.midterm_weight" 
+                                   min="0" 
+                                   max="100" 
+                                   step="0.01"
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                   required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Finals Weight (%)
+                            </label>
+                            <input type="number" 
+                                   x-model="finalConfig.finals_weight" 
+                                   min="0" 
+                                   max="100" 
+                                   step="0.01"
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                   required>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between pt-4 border-t">
+                        <p class="text-sm text-gray-600">
+                            Total: <span class="font-semibold" x-text="(parseFloat(finalConfig.prelim_weight) + parseFloat(finalConfig.midterm_weight) + parseFloat(finalConfig.finals_weight)).toFixed(2)"></span>% 
+                            <span x-show="(parseFloat(finalConfig.prelim_weight) + parseFloat(finalConfig.midterm_weight) + parseFloat(finalConfig.finals_weight)) !== 100" class="text-red-600 ml-2">
+                                <i class="fas fa-exclamation-triangle"></i> Must equal 100%
+                            </span>
+                        </p>
+                        <button type="submit" 
+                                class="px-6 py-2 text-white rounded-lg font-medium transition-colors"
+                                style="background-color: #E67E22;"
+                                onmouseover="this.style.backgroundColor='#D35400';"
+                                onmouseout="this.style.backgroundColor='#E67E22';">
+                            <i class="fas fa-save mr-2"></i>Save Final Config
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
 
         @if(isset($subject->studentMappings) && $subject->studentMappings->isEmpty())
@@ -256,7 +519,7 @@
                                         <!-- Class Standing (Auto-calculated) -->
                                         <td class="px-6 py-4 text-center bg-green-25 border-l border-green-200">
                                             <div class="text-sm font-medium text-gray-900" data-student-mapping-id="{{ $studentMapping->id }}">
-                                                {{ isset($termGrade) && $termGrade && isset($termGrade->class_standing) ? number_format($termGrade->class_standing, 2) : '-' }}
+                                                {{ isset($termGrade) && $termGrade && isset($termGrade->class_standing) ? round($termGrade->class_standing) : '-' }}
                                             </div>
                                         </td>
                                         
@@ -279,14 +542,14 @@
                                         <!-- Exam Grade (Auto-calculated) -->
                                         <td class="px-6 py-4 text-center bg-orange-25 border-l border-orange-200">
                                             <div class="text-sm font-medium text-gray-900">
-                                                {{ isset($termGrade) && $termGrade && isset($termGrade->exam_grade) ? number_format($termGrade->exam_grade, 2) : '-' }}
+                                                {{ isset($termGrade) && $termGrade && isset($termGrade->exam_grade) ? round($termGrade->exam_grade) : '-' }}
                                             </div>
                                         </td>
                                         
                                         <!-- Term Grade (Auto-calculated) -->
                                         <td class="px-6 py-4 text-center bg-red-25 border-l border-red-200">
                                             <div class="text-sm font-bold text-red-600">
-                                                {{ isset($termGrade) && $termGrade && isset($termGrade->term_grade) ? number_format($termGrade->term_grade, 2) : '-' }}
+                                                {{ isset($termGrade) && $termGrade && isset($termGrade->term_grade) ? round($termGrade->term_grade) : '-' }}
                                             </div>
                                         </td>
                                     </tr>
@@ -843,5 +1106,93 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Save Term Configuration
+function saveTermConfig() {
+    const config = Alpine.raw(this.termConfig);
+    
+    // Validate total equals 100
+    const total = parseFloat(config.class_standing_weight) + parseFloat(config.exam_weight);
+    if (total !== 100) {
+        showNotification('Class Standing and Exam weights must sum to 100%', 'error');
+        return;
+    }
+
+    // Collect activity weights
+    const activityWeights = {};
+    document.querySelectorAll('input[name^="activity_weights"]').forEach(input => {
+        const activityId = input.name.match(/\[(\d+)\]/)[1];
+        activityWeights[activityId] = parseFloat(input.value) || 0;
+    });
+
+    fetch('{{ route("grades.save-grading-config", $subject) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            term: '{{ $term }}',
+            class_standing_weight: config.class_standing_weight,
+            exam_weight: config.exam_weight,
+            activity_weights: activityWeights
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            this.showConfig = false;
+            // Reload to show updated weights
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            showNotification(data.message || 'Failed to save configuration', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving configuration:', error);
+        showNotification('Failed to save configuration', 'error');
+    });
+}
+
+// Save Final Rating Configuration
+function saveFinalConfig() {
+    const config = Alpine.raw(this.finalConfig);
+    
+    // Validate total equals 100
+    const total = parseFloat(config.prelim_weight) + parseFloat(config.midterm_weight) + parseFloat(config.finals_weight);
+    if (total !== 100) {
+        showNotification('Term weights must sum to 100%', 'error');
+        return;
+    }
+
+    fetch('{{ route("grades.save-final-rating-config", $subject) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            prelim_weight: config.prelim_weight,
+            midterm_weight: config.midterm_weight,
+            finals_weight: config.finals_weight
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            this.showFinalConfig = false;
+        } else {
+            showNotification(data.message || 'Failed to save configuration', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving configuration:', error);
+        showNotification('Failed to save configuration', 'error');
+    });
+}
 </script>
 @endsection

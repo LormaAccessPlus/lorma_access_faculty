@@ -4,7 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\ClassroomSyncController;
-use App\Http\Controllers\GradeSyncController;
+use App\Http\Controllers\GradingSystemController;
+use App\Http\Controllers\StudentMappingPageController;
 
 // Authentication Routes
 Route::get('/login', [GoogleAuthController::class, 'showLogin'])->name('auth.login');
@@ -229,21 +230,19 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/get-term-grade', [App\Http\Controllers\GradeController::class, 'getTermGrade'])->name('get-term-grade');
         Route::post('/subjects/{subject}/import-from-classroom', [App\Http\Controllers\GradeController::class, 'importFromClassroom'])->name('import-from-classroom');
         
+        // Grading Configuration Routes
+        Route::post('/subjects/{subject}/grading-config', [App\Http\Controllers\GradeController::class, 'saveGradingConfig'])->name('save-grading-config');
+        Route::post('/subjects/{subject}/final-rating-config', [App\Http\Controllers\GradeController::class, 'saveFinalRatingConfig'])->name('save-final-rating-config');
+        
         // Export Routes
         Route::get('/subjects/{subject}/export/activities', [App\Http\Controllers\GradeController::class, 'exportActivities'])->name('export.activities');
         Route::get('/subjects/{subject}/export/pp', [App\Http\Controllers\GradeController::class, 'exportPP'])->name('export.pp');
         Route::get('/subjects/{subject}/export/term/{term}', [App\Http\Controllers\GradeController::class, 'exportTerm'])->name('export.term');
-        
-        // Grade Synchronization Routes
-        Route::post('/sync/test-connections', [App\Http\Controllers\GradeSyncController::class, 'testConnections'])->name('sync.test-connections');
     });
     
-    // Grade Synchronization Routes (Subject-specific)
-    Route::prefix('subjects/{subject}/grades/sync')->name('grades.sync.')->group(function () {
-        Route::get('/', [App\Http\Controllers\GradeSyncController::class, 'index'])->name('index');
-        Route::post('/', [App\Http\Controllers\GradeSyncController::class, 'sync'])->name('store');
-        Route::post('/verify', [App\Http\Controllers\GradeSyncController::class, 'verify'])->name('verify');
-        Route::post('/statistics', [App\Http\Controllers\GradeSyncController::class, 'statistics'])->name('statistics');
-        Route::post('/preview', [App\Http\Controllers\GradeSyncController::class, 'preview'])->name('preview');
-    });
+    // Grading System Page
+    Route::get('/grading-system', [GradingSystemController::class, 'index'])->name('grading-system.index');
+    
+    // Student Mapping Page
+    Route::get('/student-mapping', [StudentMappingPageController::class, 'index'])->name('student-mapping.index');
 });
