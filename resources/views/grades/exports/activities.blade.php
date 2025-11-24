@@ -130,9 +130,31 @@
         @endif
     @endforeach
 
+    <!-- Signature Section -->
+    <div style="margin-top: 50px;">
+        <table style="width: 100%; border: none;">
+            <tr>
+                <td style="width: 50%; border: none; text-align: center; vertical-align: bottom;">
+                    <div style="margin-bottom: 40px;"></div>
+                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
+                        <strong>Submitted by Adviser</strong>
+                    </div>
+                    <div style="margin-top: 5px; font-size: 9px;">Signature over Printed Name</div>
+                </td>
+                <td style="width: 50%; border: none; text-align: center; vertical-align: bottom;">
+                    <div style="margin-bottom: 40px;"></div>
+                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
+                        <strong>Noted by Dean</strong>
+                    </div>
+                    <div style="margin-top: 5px; font-size: 9px;">Signature over Printed Name</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
     <div class="footer">
         <p>Lorma Colleges - Faculty Grading System</p>
-        <p>This is a computer-generated document. No signature required.</p>
+        <p>Generated: {{ now()->format('F d, Y h:i A') }}</p>
     </div>
 </body>
 </html>

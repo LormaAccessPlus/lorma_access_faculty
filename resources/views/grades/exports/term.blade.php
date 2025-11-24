@@ -119,25 +119,32 @@
         </tfoot>
     </table>
 
-    <div class="signature-section">
-        <div class="signature-box">
-            <div class="signature-line">
-                Faculty Signature
-            </div>
-            <p style="margin-top: 5px;">{{ auth('faculty')->user()->name ?? 'Faculty Member' }}</p>
-        </div>
-        <div class="signature-box">
-            <div class="signature-line">
-                Date
-            </div>
-            <p style="margin-top: 5px;">{{ now()->format('F d, Y') }}</p>
-        </div>
+    <!-- Signature Section -->
+    <div style="margin-top: 50px;">
+        <table style="width: 100%; border: none;">
+            <tr>
+                <td style="width: 50%; border: none; text-align: center; vertical-align: bottom;">
+                    <div style="margin-bottom: 40px;"></div>
+                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
+                        <strong>Submitted by Adviser</strong>
+                    </div>
+                    <div style="margin-top: 5px; font-size: 10px;">Signature over Printed Name</div>
+                </td>
+                <td style="width: 50%; border: none; text-align: center; vertical-align: bottom;">
+                    <div style="margin-bottom: 40px;"></div>
+                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
+                        <strong>Noted by Dean</strong>
+                    </div>
+                    <div style="margin-top: 5px; font-size: 10px;">Signature over Printed Name</div>
+                </td>
+            </tr>
+        </table>
     </div>
 
     <div class="footer">
         <p>Lorma Colleges - Faculty Grading System</p>
         <p>Passing Grade: 75.00 | Term Weight: {{ ucfirst($term) }} - {{ $term == 'prelim' ? '30%' : ($term == 'midterm' ? '30%' : '40%') }}</p>
-        <p>This is a computer-generated document.</p>
+        <p>Generated: {{ now()->format('F d, Y h:i A') }}</p>
     </div>
 </body>
 </html>

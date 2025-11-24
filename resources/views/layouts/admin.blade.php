@@ -328,6 +328,7 @@
         <div class="flex flex-col flex-1 overflow-hidden">
             <!-- Top bar -->
             <div class="flex-shrink-0 flex h-16 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+                <!-- Mobile sidebar toggle -->
                 <button type="button" 
                         class="-m-2.5 p-2.5 text-gray-700 lg:hidden"
                         @click="sidebarOpen = true">
@@ -335,8 +336,17 @@
                     <i class="fas fa-bars text-xl"></i>
                 </button>
                 
+                <!-- Desktop sidebar toggle - ALWAYS VISIBLE -->
+                <button type="button" 
+                        id="sidebarToggleBtn"
+                        class="hidden lg:block p-2.5 text-gray-700 hover:text-white hover:bg-teal-600 transition-all rounded-lg border-2 border-teal-600"
+                        onclick="window.toggleSidebar()"
+                        title="Toggle Sidebar (Ctrl+B)">
+                    <i class="fas fa-bars text-lg"></i>
+                </button>
+                
                 <!-- Separator -->
-                <div class="h-6 w-px bg-gray-200 lg:hidden" aria-hidden="true"></div>
+                <div class="h-6 w-px bg-gray-200" aria-hidden="true"></div>
                 
                 <div class="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
                     <div class="flex items-center gap-x-4 lg:gap-x-6">
@@ -452,6 +462,43 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Test connections after a short delay
             setTimeout(testGradeConnections, 1000);
+        });
+        
+        // Sidebar toggle functionality
+        let sidebarHidden = false;
+        
+        window.toggleSidebar = function() {
+            const sidebar = document.querySelector('.fixed.inset-y-0.left-0.z-50.w-64');
+            const mainContainer = document.querySelector('.flex.flex-col.flex-1');
+            
+            if (!sidebar || !mainContainer) {
+                console.error('Sidebar or main container not found');
+                return;
+            }
+            
+            if (sidebarHidden) {
+                // Show sidebar
+                sidebar.style.transform = 'translateX(0)';
+                sidebar.style.transition = 'transform 0.3s ease-in-out';
+                mainContainer.style.marginLeft = '';
+                mainContainer.style.transition = 'margin-left 0.3s ease-in-out';
+                sidebarHidden = false;
+            } else {
+                // Hide sidebar
+                sidebar.style.transform = 'translateX(-100%)';
+                sidebar.style.transition = 'transform 0.3s ease-in-out';
+                mainContainer.style.marginLeft = '0';
+                mainContainer.style.transition = 'margin-left 0.3s ease-in-out';
+                sidebarHidden = true;
+            }
+        };
+        
+        // Keyboard shortcut (Ctrl + B)
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'b') {
+                e.preventDefault();
+                window.toggleSidebar();
+            }
         });
         
         // Global notification system
