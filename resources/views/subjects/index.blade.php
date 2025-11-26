@@ -49,7 +49,7 @@
                             <p class="text-gray-700 mb-2">{{ $subject->subject_name }}</p>
                             <p class="text-sm text-gray-600 mb-3">Section: {{ $subject->section }}</p>
                             <div class="flex justify-between items-center mb-3">
-                                <span class="text-xs text-gray-500">{{ $subject->activities_count ?? 0 }} activities</span>
+                                <span class="text-xs text-gray-500">{{ $subject->activities->count() }} activities</span>
                                 <div class="flex space-x-2">
                                     <a href="{{ route('subjects.show', $subject) }}" class="text-blue-600 hover:text-blue-800 text-sm">View</a>
                                     <a href="{{ route('subjects.edit', $subject) }}" class="text-green-600 hover:text-green-800 text-sm">Edit</a>
@@ -114,7 +114,7 @@
                                                 <p class="text-sm text-gray-700 mb-1">{{ $subject->subject_name }}</p>
                                                 <p class="text-xs text-gray-600 mb-2">Section: {{ $subject->section }}</p>
                                                 <div class="flex justify-between items-center">
-                                                    <span class="text-xs text-gray-500">{{ $subject->activities_count ?? 0 }} activities</span>
+                                                    <span class="text-xs text-gray-500">{{ $subject->activities->count() }} activities</span>
                                                     <a href="{{ route('subjects.show', $subject) }}" class="text-blue-600 hover:text-blue-800 text-xs">View</a>
                                                 </div>
                                             </div>

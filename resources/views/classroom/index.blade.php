@@ -23,7 +23,12 @@
         <!-- Connected Subjects -->
         <div class="bg-white rounded-lg shadow-md mb-8">
             <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-800">Connected Subjects</h2>
+                <h2 class="text-xl font-semibold text-gray-800">
+                    Connected Subjects 
+                    <span class="ml-2 px-3 py-1 text-sm font-medium text-white rounded-full" style="background-color: #08695A;">
+                        {{ $connectedSubjects->count() }}
+                    </span>
+                </h2>
                 <p class="text-gray-600 text-sm">Subjects that are connected to Google Classroom courses</p>
             </div>
             <div class="p-6">
@@ -68,7 +73,12 @@
         <!-- Unconnected Subjects -->
         <div class="bg-white rounded-lg shadow-md">
             <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-800">Available Subjects</h2>
+                <h2 class="text-xl font-semibold text-gray-800">
+                    Available Subjects 
+                    <span class="ml-2 px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded-full">
+                        {{ $unconnectedSubjects->count() }}
+                    </span>
+                </h2>
                 <p class="text-gray-600 text-sm">Connect these subjects to Google Classroom courses</p>
             </div>
             <div class="p-6">

@@ -408,6 +408,9 @@
                                         Laboratory Activities
                                     </th>
                                 @endif
+                                <th rowspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-teal-50 border-l border-teal-200 min-w-32">
+                                    Total CS
+                                </th>
                                 <th rowspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-green-50 border-l border-green-200 min-w-32">
                                     Class Standing
                                 </th>
@@ -521,6 +524,44 @@
                                                 </td>
                                             @endforeach
                                         @endif
+                                        
+                                        <!-- Total CS (Score/Total) -->
+                                        <td class="px-6 py-4 text-center bg-teal-25 border-l border-teal-200">
+                                            @php
+                                                $totalScore = 0;
+                                                $totalPossible = 0;
+                                                
+                                                // Calculate total from lecture activities
+                                                if(isset($lectureActivities)) {
+                                                    foreach($lectureActivities as $activity) {
+                                                        $gradeRecord = isset($gradeMatrix[$studentMapping->id][$activity->id]) ? $gradeMatrix[$studentMapping->id][$activity->id] : null;
+                                                        if($gradeRecord && $gradeRecord->score !== null) {
+                                                            $totalScore += $gradeRecord->score;
+                                                        }
+                                                        $totalPossible += $activity->max_score;
+                                                    }
+                                                }
+                                                
+                                                // Calculate total from lab activities
+                                                if(isset($labActivities) && $subject->type === 'lecture_lab') {
+                                                    foreach($labActivities as $activity) {
+                                                        $gradeRecord = isset($gradeMatrix[$studentMapping->id][$activity->id]) ? $gradeMatrix[$studentMapping->id][$activity->id] : null;
+                                                        if($gradeRecord && $gradeRecord->score !== null) {
+                                                            $totalScore += $gradeRecord->score;
+                                                        }
+                                                        $totalPossible += $activity->max_score;
+                                                    }
+                                                }
+                                            @endphp
+                                            <div class="text-sm font-semibold text-teal-900">
+                                                {{ number_format($totalScore, 0) }} / {{ number_format($totalPossible, 0) }}
+                                            </div>
+                                            @if($totalPossible > 0)
+                                                <div class="text-xs text-gray-500 mt-1">
+                                                    {{ number_format(($totalScore / $totalPossible) * 100, 1) }}%
+                                                </div>
+                                            @endif
+                                        </td>
                                         
                                         <!-- Class Standing (Auto-calculated) -->
                                         <td class="px-6 py-4 text-center bg-green-25 border-l border-green-200">

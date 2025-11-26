@@ -140,15 +140,7 @@ Route::post('/debug-create-mapping', function (\Illuminate\Http\Request $request
     }
 });
 
-// Subject Mapping Routes (Temporary - no auth for testing)
-Route::prefix('subjects/mapping')->name('subjects.mapping.')->group(function () {
-    Route::get('/', [App\Http\Controllers\SubjectMappingController::class, 'index'])->name('index');
-    Route::post('/', [App\Http\Controllers\SubjectMappingController::class, 'store'])->name('store');
-    Route::delete('/{subject}', [App\Http\Controllers\SubjectMappingController::class, 'destroy'])->name('destroy');
-    Route::get('/gcr-courses', [App\Http\Controllers\SubjectMappingController::class, 'getGoogleClassroomCourses'])->name('gcr-courses');
-    Route::post('/school-subjects', [App\Http\Controllers\SubjectMappingController::class, 'getSchoolSubjects'])->name('school-subjects');
-    Route::get('/statistics', [App\Http\Controllers\SubjectMappingController::class, 'getStatistics'])->name('statistics');
-});
+// Subject Mapping Routes - REMOVED (duplicate of Google Classroom page)
 
 // Protected Routes
 Route::middleware(['auth.faculty'])->group(function () {

@@ -613,13 +613,14 @@ class GradeController extends Controller
 
             $importedCount = 0;
             $errors = [];
+            $skippedActivities = [];
 
             // Import grades for each activity
             foreach ($activities as $activity) {
                 try {
                     // Skip if activity doesn't have a Google Classroom ID
                     if (!$activity->gcr_assignment_id) {
-                        $errors[] = "Activity '{$activity->name}' is not connected to Google Classroom";
+                        $skippedActivities[] = $activity->name;
                         continue;
                     }
 
@@ -699,15 +700,26 @@ class GradeController extends Controller
                 }
             }
 
-            $message = "Successfully imported {$importedCount} grades from Google Classroom.";
+            // Build success message
+            $message = "Successfully imported {$importedCount} grade(s) from Google Classroom.";
+            
+            // Add info about skipped web-only activities
+            if (!empty($skippedActivities)) {
+                $skippedCount = count($skippedActivities);
+                $message .= " {$skippedCount} web-only activity(ies) skipped (manual entry required).";
+            }
+            
+            // Add actual errors if any
             if (!empty($errors)) {
-                $message .= " Some errors occurred: " . implode(', ', $errors);
+                $message .= " Errors: " . implode(', ', $errors);
             }
 
             return response()->json([
                 'success' => true,
                 'message' => $message,
                 'imported_count' => $importedCount,
+                'skipped_count' => count($skippedActivities),
+                'skipped_activities' => $skippedActivities,
                 'errors' => $errors
             ]);
 

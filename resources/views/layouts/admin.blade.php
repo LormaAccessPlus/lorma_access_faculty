@@ -45,17 +45,7 @@
                             <span class="font-medium">Dashboard</span>
                         </a>
                         
-                        <!-- Subject Mapping -->
-                        <a href="{{ route('subjects.mapping.index') }}" 
-                           class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('subjects.mapping.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
-                           style="{{ request()->routeIs('subjects.mapping.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
-                           onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
-                           onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
-                            <i class="fas fa-link w-5 h-5 mr-3"></i>
-                            <span class="font-medium">Subject Mapping</span>
-                            <span class="ml-2 px-2 py-1 text-xs rounded-full" style="background-color: rgba(8, 105, 90, 0.2); color: #08695A;">New</span>
-                        </a>
-                        
+
                         <!-- My Subjects -->
                         <a href="{{ route('subjects.index') }}" 
                            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('subjects.*') && !request()->routeIs('subjects.mapping.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
@@ -146,11 +136,7 @@
                     <div class="px-4 pb-6">
                         <h3 class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Quick Actions</h3>
                         <div class="mt-3 space-y-1">
-                            <a href="{{ route('subjects.mapping.index') }}" 
-                               class="flex items-center px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
-                                <i class="fas fa-link w-4 h-4 mr-2"></i>
-                                Map Subject
-                            </a>
+
                             <a href="{{ route('classroom.index') }}" 
                                class="flex items-center px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
                                 <i class="fas fa-sync w-4 h-4 mr-2"></i>
