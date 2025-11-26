@@ -337,7 +337,8 @@ class GradeController extends Controller
             'student_mapping_id' => 'required|exists:student_mappings,id',
             'subject_id' => 'required|exists:subjects,id',
             'term' => 'required|in:prelim,midterm,finals',
-            'exam_score' => 'nullable|numeric|min:0|max:100',
+            'exam_score' => 'nullable|numeric|min:0',
+            'exam_max_score' => 'nullable|numeric|min:1',
         ]);
 
         $studentMapping = StudentMapping::findOrFail($request->student_mapping_id);
@@ -345,6 +346,11 @@ class GradeController extends Controller
         // Validate that the student mapping belongs to the subject
         if ($studentMapping->subject_id !== (int)$request->subject_id) {
             return response()->json(['error' => 'Invalid student mapping for this subject'], 400);
+        }
+
+        // Validate score doesn't exceed max score
+        if ($request->exam_score !== null && $request->exam_max_score !== null && $request->exam_score > $request->exam_max_score) {
+            return response()->json(['error' => 'Exam score cannot exceed maximum score'], 400);
         }
 
         // Find or create term grade record
@@ -356,6 +362,7 @@ class GradeController extends Controller
             ],
             [
                 'exam_score' => $request->exam_score,
+                'exam_max_score' => $request->exam_max_score ?? 100,
             ]
         );
 
@@ -369,6 +376,7 @@ class GradeController extends Controller
             'term_grade' => [
                 'id' => $termGrade->id,
                 'exam_score' => $termGrade->exam_score,
+                'exam_max_score' => $termGrade->exam_max_score,
                 'exam_grade' => $termGrade->exam_grade,
                 'term_grade' => $termGrade->term_grade,
             ]
@@ -453,14 +461,18 @@ class GradeController extends Controller
             $examWeight = $gradingConfig->exam_weight / 100;
         }
         
+        // Calculate exam percentage: (score / max_score) × 100
+        $examMaxScore = $termGrade->exam_max_score ?? 100;
+        $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
+        
         if ($termGrade->term === 'prelim') {
-            // Prelim: Class standing percentage directly, exam grade = exam score
-            $examGrade = $termGrade->exam_score;
+            // Prelim: Class standing percentage directly, exam grade = exam percentage
+            $examGrade = $examPercentage;
             $termGradeValue = ($termGrade->class_standing * $classWeight) + 
                              ($examGrade * $examWeight);
         } else {
-            // Midterm/Finals: Class standing already transformed, exam grade = (score/100) × 50 + 50
-            $examGrade = ($termGrade->exam_score / 100) * 50 + 50;
+            // Midterm/Finals: Class standing already transformed, exam grade = (percentage/100) × 50 + 50
+            $examGrade = ($examPercentage / 100) * 50 + 50;
             $termGradeValue = ($termGrade->class_standing * $classWeight) + 
                              ($examGrade * $examWeight);
         }
@@ -801,12 +813,16 @@ class GradeController extends Controller
         $examWeightDecimal = $examWeight / 100;
 
         foreach ($termGrades as $termGrade) {
+            // Calculate exam percentage: (score / max_score) × 100
+            $examMaxScore = $termGrade->exam_max_score ?? 100;
+            $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
+            
             // Recalculate exam grade based on term
             if ($term === 'prelim') {
-                $examGrade = $termGrade->exam_score;
+                $examGrade = $examPercentage;
             } else {
-                // Midterm/Finals: exam grade = (score/100) × 50 + 50
-                $examGrade = ($termGrade->exam_score / 100) * 50 + 50;
+                // Midterm/Finals: exam grade = (percentage/100) × 50 + 50
+                $examGrade = ($examPercentage / 100) * 50 + 50;
             }
 
             // Calculate new term grade with updated weights

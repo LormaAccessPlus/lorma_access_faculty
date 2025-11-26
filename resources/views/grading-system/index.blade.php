@@ -77,13 +77,16 @@
                         <!-- Actions -->
                         <div class="space-y-2">
                             <a href="{{ route('grades.matrix', $subject) }}" 
-                               class="flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                <span><i class="fas fa-table mr-2"></i>Grade Matrix</span>
+                               class="flex items-center justify-between px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
+                               style="background-color: #08695A;"
+                               onmouseover="this.style.backgroundColor='#065A4A';"
+                               onmouseout="this.style.backgroundColor='#08695A';">
+                                <span><i class="fas fa-table mr-2"></i>Full Grade Matrix</span>
                                 <i class="fas fa-arrow-right text-xs"></i>
                             </a>
                             <a href="{{ route('grades.term', $subject) }}" 
-                               class="flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                <span><i class="fas fa-calendar-alt mr-2"></i>Term Grading</span>
+                               class="flex items-center justify-between px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                                <span><i class="fas fa-edit mr-2"></i>Edit Term Grades</span>
                                 <i class="fas fa-arrow-right text-xs"></i>
                             </a>
                         </div>
@@ -93,11 +96,11 @@
                             <p class="text-xs font-medium text-gray-500 mb-2">Export Options</p>
                             <div class="flex flex-wrap gap-2">
                                 <a href="{{ route('grades.export.activities', $subject) }}" 
-                                   class="inline-flex items-center px-3 py-1 text-xs font-medium text-teal-700 bg-teal-50 rounded hover:bg-teal-100 transition-colors">
+                                   class="inline-flex items-center px-3 py-1 text-xs font-medium text-orange-700 bg-orange-50 rounded hover:bg-orange-100 transition-colors">
                                     <i class="fas fa-file-pdf mr-1"></i>Activities
                                 </a>
                                 <a href="{{ route('grades.export.pp', $subject) }}" 
-                                   class="inline-flex items-center px-3 py-1 text-xs font-medium text-teal-700 bg-teal-50 rounded hover:bg-teal-100 transition-colors">
+                                   class="inline-flex items-center px-3 py-1 text-xs font-medium text-purple-700 bg-purple-50 rounded hover:bg-purple-100 transition-colors">
                                     <i class="fas fa-file-pdf mr-1"></i>Grades (PP)
                                 </a>
                             </div>

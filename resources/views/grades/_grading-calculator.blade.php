@@ -62,7 +62,7 @@
                 <div class="text-left">
                     <div class="text-sm text-gray-600 font-medium">Current Formula</div>
                     <div class="text-lg font-semibold text-gray-900">
-                        40% CS + 60% Exam per term | 
+                        {{ $gradingConfig->class_standing_weight ?? 40 }}% CS + {{ $gradingConfig->exam_weight ?? 60 }}% Exam per term | 
                         <span class="text-blue-600" x-text="prelimWeight + '%'"></span> Prelims + 
                         <span class="text-green-600" x-text="midtermWeight + '%'"></span> Midterm + 
                         <span class="text-purple-600" x-text="finalsWeight + '%'"></span> Finals
