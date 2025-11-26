@@ -12,11 +12,18 @@
         [x-cloak] { display: none !important; }
     </style>
 </head>
-<body class="bg-gray-50" x-data="{ sidebarOpen: false }">
+<body class="bg-gray-50" x-data="{ sidebarOpen: false, sidebarHidden: false }">
     <div class="flex h-screen overflow-hidden">
         <!-- Sidebar -->
-        <div class="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:flex lg:flex-shrink-0" 
-             :class="{ '-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen }">
+        <div class="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:static lg:flex lg:flex-shrink-0" 
+             :class="{ 
+                 '-translate-x-full': !sidebarOpen && !sidebarHidden, 
+                 'translate-x-0': sidebarOpen,
+                 'lg:-translate-x-full': sidebarHidden,
+                 'lg:translate-x-0': !sidebarHidden
+             }"
+             x-show="!sidebarHidden || sidebarOpen"
+             x-transition>
             
             <div class="flex flex-col w-64">
                 <!-- Logo -->
@@ -212,9 +219,10 @@
                 <!-- Desktop sidebar toggle - ALWAYS VISIBLE -->
                 <button type="button" 
                         id="sidebarToggleBtn"
-                        class="hidden lg:block p-2.5 text-gray-700 hover:text-white hover:bg-teal-600 transition-all rounded-lg border-2 border-teal-600"
-                        onclick="window.toggleSidebar()"
-                        title="Toggle Sidebar (Ctrl+B)">
+                        class="hidden lg:block p-2.5 text-gray-700 hover:text-white transition-all rounded-lg border-2"
+                        :class="sidebarHidden ? 'bg-teal-600 text-white border-teal-600' : 'border-teal-600 hover:bg-teal-600'"
+                        @click="sidebarHidden = !sidebarHidden"
+                        title="Toggle Fullscreen (Hide Sidebar)">
                     <i class="fas fa-bars text-lg"></i>
                 </button>
                 

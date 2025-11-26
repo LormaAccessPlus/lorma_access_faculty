@@ -47,20 +47,23 @@
         <!-- Subjects Grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             @foreach($subjects as $subject)
-                <div class="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                    <div class="p-6">
-                        <!-- Subject Header -->
-                        <div class="flex items-start justify-between mb-4">
+                <div class="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                    <!-- Subject Header with Colored Background -->
+                    <div class="px-6 py-4 relative" style="background: linear-gradient(135deg, #08695A 0%, #0A7B6A 100%);">
+                        <div class="flex items-start justify-between">
                             <div class="flex-1">
-                                <h3 class="text-lg font-semibold text-gray-900">{{ $subject->subject_code }}</h3>
-                                <p class="text-sm text-gray-600 mt-1">{{ $subject->subject_name }}</p>
+                                <h3 class="text-2xl font-bold text-white mb-1">{{ $subject->subject_name }}</h3>
+                                <p class="text-sm text-teal-100 font-medium">{{ $subject->subject_code }}</p>
                             </div>
                             @if($subject->gcr_class_id)
-                                <span class="px-2 py-1 text-xs font-medium text-blue-800 bg-blue-100 rounded-full">
+                                <span class="px-2 py-1 text-xs font-medium text-white bg-white bg-opacity-20 rounded-full backdrop-blur-sm">
                                     <i class="fab fa-google mr-1"></i>GCR
                                 </span>
                             @endif
                         </div>
+                    </div>
+
+                    <div class="p-6">
 
                         <!-- Stats -->
                         <div class="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-gray-200">
