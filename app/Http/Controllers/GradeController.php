@@ -171,6 +171,25 @@ class GradeController extends Controller
             // Recalculate class standing for this student and term
             $this->recalculateClassStanding($studentMapping, $activity->term);
 
+            // Get updated term grade for this student
+            $termGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+                ->where('subject_id', $studentMapping->subject_id)
+                ->where('term', $activity->term)
+                ->first();
+
+
+            // Calculate total CS (sum of all activity scores for this student in this term)
+            $totalCSData = GradeRecord::whereHas('activity', function ($query) use ($studentMapping, $activity) {
+                $query->where('subject_id', $studentMapping->subject_id)
+                      ->where('term', $activity->term);
+            })->where('student_mapping_id', $studentMapping->id)
+              ->selectRaw('SUM(score) as total_score, SUM(max_score) as total_possible')
+              ->first();
+
+            $totalScore = $totalCSData->total_score ?? 0;
+            $totalPossible = $totalCSData->total_possible ?? 0;
+            $totalPercentage = $totalPossible > 0 ? ($totalScore / $totalPossible) * 100 : 0;
+
             return response()->json([
                 'success' => true,
                 'grade_record' => [
@@ -178,7 +197,17 @@ class GradeController extends Controller
                     'score' => $gradeRecord->score,
                     'percentage' => $gradeRecord->percentage,
                     'max_score' => $gradeRecord->max_score,
-                ]
+                ],
+                'term_grade' => $termGrade ? [
+                    'class_standing' => $termGrade->class_standing,
+                    'exam_grade' => $termGrade->exam_grade,
+                    'term_grade' => $termGrade->term_grade,
+                ] : null,
+                'total_cs' => [
+                    'score' => $totalScore,
+                    'possible' => $totalPossible,
+                    'percentage' => round($totalPercentage, 1),
+                ],
             ]);
         } catch (\Exception $e) {
             \Log::error('Grade save error: ' . $e->getMessage(), [
@@ -306,6 +335,7 @@ class GradeController extends Controller
     {
         $config = config('grading');
         
+<<<<<<< Updated upstream
         if ($termGrade->term === 'prelim') {
             // Prelim: Class standing percentage directly, exam grade = (score/100) * 100
             $examGrade = $termGrade->exam_score;
@@ -316,11 +346,30 @@ class GradeController extends Controller
             $examGrade = ($termGrade->exam_score / 100) * 50 + 50;
             $termGradeValue = ($termGrade->class_standing * $config['midterm']['class_weight']) + 
                              ($examGrade * $config['midterm']['exam_weight']);
+=======
+                if ($termGrade->term === 'prelim') {
+            // Prelim: exam grade = exam percentage
+            $examGrade = $examPercentage;
+        } else {
+            // Midterm/Finals: exam grade = (percentage/100) × 50 + 50
+            $examGrade = ($examPercentage / 100) * 50 + 50;
+>>>>>>> Stashed changes
         }
+        
+        // Calculate weighted exam grade
+        $weightedExamGrade = $examGrade * $examWeight;
+        
+        // class_standing already contains the weighted CS portion, just add weighted exam
+        $termGradeValue = $termGrade->class_standing + $weightedExamGrade;
 
         $termGrade->update([
+<<<<<<< Updated upstream
             'exam_grade' => round($examGrade, 2),
             'term_grade' => round($termGradeValue, 2),
+=======
+            'exam_grade' => $weightedExamGrade,
+            'term_grade' => floor($termGradeValue * 100) / 100,
+>>>>>>> Stashed changes
         ]);
 
         return $termGrade->fresh();
@@ -349,15 +398,26 @@ class GradeController extends Controller
             return;
         }
 
-        // Calculate class standing percentage
+                // Calculate class standing percentage (Total CS)
         $classStandingPercentage = ($totalScore / $totalPossible) * 100;
 
         // For midterm and finals, apply the transformation: (score/items) × 50 + 50
-        if ($term !== 'prelim') {
-            $classStanding = ($classStandingPercentage / 100) * 50 + 50;
-        } else {
-            $classStanding = $classStandingPercentage;
-        }
+        $totalCS = $term !== 'prelim' 
+            ? ($classStandingPercentage / 100) * 50 + 50 
+            : $classStandingPercentage;
+
+        // Truncate Total CS to 1 decimal place (floor) for consistent manual calculation
+        $totalCS = floor($totalCS * 10) / 10;
+
+        // Get grading configuration to apply CS weight
+        $gradingConfig = \DB::table('grading_configs')
+            ->where('subject_id', $studentMapping->subject_id)
+            ->where('term', $term)
+            ->first();
+
+        // Apply CS weight percentage (e.g., 60% of total CS)
+        $csWeight = $gradingConfig ? $gradingConfig->class_standing_weight : 60;
+        $classStanding = floor((($totalCS * $csWeight) / 100) * 100) / 100;
 
         // Update or create term grade record
         $termGrade = TermGrade::updateOrCreate(
@@ -367,7 +427,11 @@ class GradeController extends Controller
                 'term' => $term,
             ],
             [
+<<<<<<< Updated upstream
                 'class_standing' => round($classStanding, 2),
+=======
+                'class_standing' => $classStanding,
+>>>>>>> Stashed changes
             ]
         );
 
@@ -540,4 +604,173 @@ class GradeController extends Controller
             ], 500);
         }
     }
+<<<<<<< Updated upstream
+=======
+
+    /**
+     * Export Activities + Exam scores to PDF
+     */
+    public function exportActivities(Subject $subject)
+    {
+        $subject->load([
+            'activities' => function ($query) {
+                $query->orderBy('term')->orderBy('type')->orderBy('created_at');
+            },
+            'studentMappings' => function ($query) {
+                $query->orderBy('student_name');
+            }
+        ]);
+
+        $activitiesByTerm = $subject->activities->groupBy('term');
+        
+        $gradeRecords = GradeRecord::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })->with(['studentMapping', 'activity'])->get();
+
+        $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })->with('studentMapping')->get();
+
+        $pdf = \PDF::loadView('grades.exports.activities', compact('subject', 'activitiesByTerm', 'gradeRecords', 'termGrades'));
+        
+        return $pdf->download($subject->subject_code . '_Activities_Exam.pdf');
+    }
+
+    /**
+     * Export Grade (PP) - Computed grades in percentage
+     */
+    public function exportPP(Subject $subject)
+    {
+        $subject->load([
+            'studentMappings' => function ($query) {
+                $query->orderBy('student_name');
+            }
+        ]);
+
+        $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })->with('studentMapping')->get();
+
+        $pdf = \PDF::loadView('grades.exports.pp', compact('subject', 'termGrades'));
+        
+        return $pdf->download($subject->subject_code . '_Grades_PP.pdf');
+    }
+
+    /**
+     * Export Term-Based Grading to PDF
+     */
+    public function exportTerm(Subject $subject, string $term)
+    {
+        $subject->load([
+            'studentMappings' => function ($query) {
+                $query->orderBy('student_name');
+            }
+        ]);
+
+        $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })
+        ->where('term', $term)
+        ->with('studentMapping')
+        ->get();
+
+        $pdf = \PDF::loadView('grades.exports.term', compact('subject', 'term', 'termGrades'));
+        
+        return $pdf->download($subject->subject_code . '_' . ucfirst($term) . '_Grades.pdf');
+    }
+
+    /**
+     * Recalculate all term grades for a specific term with new formula weights
+     */
+    private function recalculateTermGradesForTerm(Subject $subject, string $term, float $classStandingWeight, float $examWeight): void
+    {
+        // Get all student mappings for this subject
+        $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
+
+        // Recalculate class standing for all students with new weight
+        foreach ($studentMappings as $studentMapping) {
+            $this->recalculateClassStanding($studentMapping, $term);
+        }
+
+        // Now recalculate term grades with updated class standing
+        $termGrades = TermGrade::where('subject_id', $subject->id)
+            ->where('term', $term)
+            ->whereNotNull('class_standing')
+            ->whereNotNull('exam_score')
+            ->get();
+
+        $examWeightDecimal = $examWeight / 100;
+
+        foreach ($termGrades as $termGrade) {
+            // Calculate exam percentage: (score / max_score) × 100
+            $examMaxScore = $termGrade->exam_max_score ?? 100;
+            $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
+            
+            // Recalculate exam grade based on term
+            if ($term === 'prelim') {
+                $examGrade = $examPercentage;
+            } else {
+                // Midterm/Finals: exam grade = (percentage/100) × 50 + 50
+                $examGrade = ($examPercentage / 100) * 50 + 50;
+            }
+
+            // Truncate exam grade to 1 decimal place (same as CS)
+            $examGrade = floor($examGrade * 10) / 10;
+
+            // Calculate weighted exam grade (apply exam weight percentage)
+            $weightedExamGrade = floor(($examGrade * $examWeight) * 100) / 100;
+            
+            // class_standing already contains the weighted CS portion
+            $termGradeValue = $termGrade->class_standing + $weightedExamGrade;
+
+            $termGrade->update([
+                'exam_grade' => $weightedExamGrade,
+                'term_grade' => floor($termGradeValue * 100) / 100,
+            ]);
+        }
+    }
+
+    /**
+     * Recalculate final ratings for all students with new term weights
+     */
+    private function recalculateFinalRatings(Subject $subject, float $prelimWeight, float $midtermWeight, float $finalsWeight): void
+    {
+        // Get all student mappings for this subject
+        $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
+
+        foreach ($studentMappings as $studentMapping) {
+            // Get term grades for this student
+            $prelimGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+                ->where('subject_id', $subject->id)
+                ->where('term', 'prelim')
+                ->first();
+
+            $midtermGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+                ->where('subject_id', $subject->id)
+                ->where('term', 'midterm')
+                ->first();
+
+            $finalsGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+                ->where('subject_id', $subject->id)
+                ->where('term', 'finals')
+                ->first();
+
+            // Only calculate if all term grades exist
+            if ($prelimGrade && $prelimGrade->term_grade !== null &&
+                $midtermGrade && $midtermGrade->term_grade !== null &&
+                $finalsGrade && $finalsGrade->term_grade !== null) {
+                
+                $finalRating = ($prelimGrade->term_grade * ($prelimWeight / 100)) +
+                              ($midtermGrade->term_grade * ($midtermWeight / 100)) +
+                              ($finalsGrade->term_grade * ($finalsWeight / 100));
+
+                // Update final rating in one of the term grades (or create a separate final rating record)
+                // For now, we'll store it in the finals term grade
+                $finalsGrade->update([
+                    'final_rating' => round($finalRating)
+                ]);
+            }
+        }
+    }
+>>>>>>> Stashed changes
 }

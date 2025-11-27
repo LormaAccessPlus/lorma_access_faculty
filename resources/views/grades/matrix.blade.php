@@ -229,6 +229,7 @@
                                     </div>
                                 </div>
                             </td>
+<<<<<<< Updated upstream
                             @foreach(['prelim', 'midterm', 'finals'] as $term)
                                 @if(isset($activitiesByTerm[$term]))
                                     @php
@@ -300,6 +301,79 @@
                                     @endif
                                 @endif
                             @endforeach
+=======
+                            
+                            <!-- Prelim Grade -->
+                            <td class="px-6 py-4 text-center border-l border-gray-200 bg-blue-25">
+                                @if($prelimGrade && $prelimGrade->term_grade !== null)
+                                    <div class="space-y-1">
+                                        <div class="text-2xl font-bold text-blue-900">
+                                            {{ number_format($prelimGrade->term_grade, 2) }}
+                                        </div>
+                                        <div class="text-xs text-gray-500">
+                                            CS: {{ number_format($prelimGrade->class_standing, 2) }} | 
+                                            Exam: {{ format_score($prelimGrade->exam_score ?? 0) }}
+                                        </div>
+                                    </div>
+                                @else
+                                    <span class="text-gray-400 text-sm">—</span>
+                                @endif
+                            </td>
+                            
+                            <!-- Midterm Grade -->
+                            <td class="px-6 py-4 text-center border-l border-gray-200 bg-green-25">
+                                @if($midtermGrade && $midtermGrade->term_grade !== null)
+                                    <div class="space-y-1">
+                                        <div class="text-2xl font-bold text-green-900">
+                                            {{ number_format($midtermGrade->term_grade, 2) }}
+                                        </div>
+                                        <div class="text-xs text-gray-500">
+                                            CS: {{ number_format($midtermGrade->class_standing, 2) }} | 
+                                            Exam: {{ format_score($midtermGrade->exam_score ?? 0) }}
+                                        </div>
+                                    </div>
+                                @else
+                                    <span class="text-gray-400 text-sm">—</span>
+                                @endif
+                            </td>
+                            
+                            <!-- Finals Grade -->
+                            <td class="px-6 py-4 text-center border-l border-gray-200 bg-purple-25">
+                                @if($finalsGrade && $finalsGrade->term_grade !== null)
+                                    <div class="space-y-1">
+                                        <div class="text-2xl font-bold text-purple-900">
+                                            {{ number_format($finalsGrade->term_grade, 2) }}
+                                        </div>
+                                        <div class="text-xs text-gray-500">
+                                            CS: {{ number_format($finalsGrade->class_standing, 2) }} | 
+                                            Exam: {{ format_score($finalsGrade->exam_score ?? 0) }}
+                                        </div>
+                                    </div>
+                                @else
+                                    <span class="text-gray-400 text-sm">—</span>
+                                @endif
+                            </td>
+                            
+                            <!-- Final Grade -->
+                            <td class="px-6 py-4 text-center border-l border-gray-200 bg-teal-25">
+                                @if($finalGrade !== null)
+                                    <div class="space-y-1">
+                                        <div class="text-3xl font-bold text-teal-900">
+                                            {{ round($finalGrade) }}
+                                        </div>
+                                        <div class="text-xs font-medium" style="color: #08695A;">
+                                            @if($finalGrade >= 75)
+                                                <i class="fas fa-check-circle mr-1"></i>PASSED
+                                            @else
+                                                <i class="fas fa-times-circle mr-1"></i>FAILED
+                                            @endif
+                                        </div>
+                                    </div>
+                                @else
+                                    <span class="text-gray-400 text-sm">—</span>
+                                @endif
+                            </td>
+>>>>>>> Stashed changes
                         </tr>
                     @endforeach
                 </tbody>
