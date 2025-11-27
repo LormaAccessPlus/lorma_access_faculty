@@ -434,7 +434,7 @@
                                                     <i class="fab fa-google text-xs ml-1" title="Connected to Google Classroom"></i>
                                                 @endif
                                             </div>
-                                            <div class="text-xs text-gray-500 mt-1">/{{ $activity->max_score }}</div>
+                                            <div class="text-xs text-gray-500 mt-1">/{{ $activity->max_score == floor($activity->max_score) ? intval($activity->max_score) : $activity->max_score }}</div>
                                         </th>
                                     @endforeach
                                 @endif
@@ -447,7 +447,7 @@
                                                     <i class="fab fa-google text-xs ml-1" title="Connected to Google Classroom"></i>
                                                 @endif
                                             </div>
-                                            <div class="text-xs text-gray-500 mt-1">/{{ $activity->max_score }}</div>
+                                            <div class="text-xs text-gray-500 mt-1">/{{ $activity->max_score == floor($activity->max_score) ? intval($activity->max_score) : $activity->max_score }}</div>
                                         </th>
                                     @endforeach
                                 @endif
@@ -554,7 +554,7 @@
                                                 }
                                             @endphp
                                             <div class="text-sm font-semibold text-teal-900">
-                                                {{ number_format($totalScore, 0) }} / {{ number_format($totalPossible, 0) }}
+                                                {{ $totalScore == floor($totalScore) ? number_format($totalScore, 0) : number_format($totalScore, 2) }} / {{ $totalPossible == floor($totalPossible) ? number_format($totalPossible, 0) : number_format($totalPossible, 2) }}
                                             </div>
                                             @if($totalPossible > 0)
                                                 <div class="text-xs text-gray-500 mt-1">
@@ -566,7 +566,7 @@
                                         <!-- Class Standing (Auto-calculated) -->
                                         <td class="px-6 py-4 text-center bg-green-25 border-l border-green-200">
                                             <div class="text-sm font-medium text-gray-900" data-student-mapping-id="{{ $studentMapping->id }}">
-                                                {{ isset($termGrade) && $termGrade && isset($termGrade->class_standing) ? round($termGrade->class_standing) : '-' }}
+                                                {{ isset($termGrade) && $termGrade && isset($termGrade->class_standing) ? number_format($termGrade->class_standing, 2) : '-' }}
                                             </div>
                                         </td>
                                         
@@ -899,6 +899,48 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.add('pending');
         });
     });
+    
+    // Add input event listener to all activity grade inputs for dynamic calculation
+    document.querySelectorAll('.activity-grade-input').forEach(input => {
+        input.addEventListener('input', function() {
+            updateTotalCS(this);
+        });
+    });
+    
+    // Function to dynamically update Total CS and percentage
+    function updateTotalCS(input) {
+        const row = input.closest('tr');
+        const activityInputs = row.querySelectorAll('.activity-grade-input');
+        const totalCSCell = row.querySelector('td.bg-teal-25');
+        
+        if (!totalCSCell) return;
+        
+        let totalScore = 0;
+        let totalPossible = 0;
+        
+        activityInputs.forEach(activityInput => {
+            const score = parseFloat(activityInput.value) || 0;
+            const maxScore = parseFloat(activityInput.max) || 0;
+            
+            totalScore += score;
+            totalPossible += maxScore;
+        });
+        
+        // Update the Total CS display
+        const scoreDisplay = totalCSCell.querySelector('.text-sm');
+        const percentageDisplay = totalCSCell.querySelector('.text-xs');
+        
+        if (scoreDisplay) {
+            const scoreText = totalScore == Math.floor(totalScore) ? totalScore : totalScore.toFixed(2);
+            const possibleText = totalPossible == Math.floor(totalPossible) ? totalPossible : totalPossible.toFixed(2);
+            scoreDisplay.textContent = `${scoreText} / ${possibleText}`;
+        }
+        
+        if (percentageDisplay && totalPossible > 0) {
+            const percentage = (totalScore / totalPossible) * 100;
+            percentageDisplay.textContent = `${percentage.toFixed(1)}%`;
+        }
+    }
 
     function saveGrade(input) {
         const studentMappingId = input.dataset.studentMappingId;
@@ -928,11 +970,17 @@ document.addEventListener('DOMContentLoaded', function() {
         input.classList.remove('saved', 'error', 'pending');
         input.classList.add('saving');
 
+        console.log('Saving grade:', { studentMappingId, activityId, score, maxScore });
+        console.log('Route URL:', '{{ route("grades.update") }}');
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+        console.log('CSRF Token exists:', !!csrfToken);
+        
         fetch('{{ route("grades.update") }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'X-CSRF-TOKEN': csrfToken ? csrfToken.getAttribute('content') : '',
                 'Accept': 'application/json'
             },
             body: JSON.stringify({
@@ -942,12 +990,12 @@ document.addEventListener('DOMContentLoaded', function() {
             })
         })
         .then(response => {
-            console.log('Response status:', response.status);
+            console.log('Response received:', response.status, response.statusText);
             
             if (!response.ok) {
                 return response.text().then(text => {
-                    console.error('Response text:', text);
-                    throw new Error(`HTTP ${response.status}: ${response.statusText} - ${text}`);
+                    console.error('Error response:', text);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 });
             }
             return response.json();
@@ -994,12 +1042,19 @@ document.addEventListener('DOMContentLoaded', function() {
             input.classList.add('error');
             input.dataset.hasChanged = 'false';
             console.error('Error saving grade:', error);
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
             
-            let errorMessage = 'Network error. Please check your connection.';
+            let errorMessage = 'Failed to save grade. ';
             if (error.message.includes('HTTP')) {
-                errorMessage = `Server error: ${error.message}`;
+                errorMessage += error.message;
             } else if (error.name === 'TypeError') {
-                errorMessage = 'Connection failed. Please check if the server is running.';
+                errorMessage += 'Network error - please check your connection.';
+            } else {
+                errorMessage += error.message;
             }
             
             showNotification(errorMessage, 'error');
@@ -1076,17 +1131,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Update computed grades in the same row
                 const row = input.closest('tr');
+                const classStandingCell = row.querySelector('td.bg-green-25 div');
                 const examGradeCell = row.querySelector('td:nth-last-child(2) div');
                 const termGradeCell = row.querySelector('td:last-child div');
                 
+                // Update class standing with 2 decimals
+                if (data.term_grade && data.term_grade.class_standing !== null && data.term_grade.class_standing !== undefined) {
+                    classStandingCell.textContent = parseFloat(data.term_grade.class_standing).toFixed(2);
+                }
+                
+                // Update exam grade with 2 decimals
                 if (data.term_grade && data.term_grade.exam_grade !== null) {
-                    examGradeCell.textContent = Math.round(data.term_grade.exam_grade);
+                    examGradeCell.textContent = parseFloat(data.term_grade.exam_grade).toFixed(2);
                 } else {
                     examGradeCell.textContent = '-';
                 }
                 
+                // Update term grade with 2 decimals
                 if (data.term_grade && data.term_grade.term_grade !== null) {
-                    termGradeCell.textContent = Math.round(data.term_grade.term_grade);
+                    termGradeCell.textContent = parseFloat(data.term_grade.term_grade).toFixed(2);
                 } else {
                     termGradeCell.textContent = '-';
                 }
