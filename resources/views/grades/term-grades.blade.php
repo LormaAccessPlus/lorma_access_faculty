@@ -487,7 +487,7 @@
                                                         placeholder="0"
                                                     >
                                                     @if(isset($gradeRecord) && $gradeRecord && isset($gradeRecord->percentage))
-                                                        <div class="text-xs text-gray-500 mt-1">{{ number_format($gradeRecord->percentage, 1) }}%</div>
+                                                        <div class="text-xs text-gray-500 mt-1">{{ number_format($gradeRecord->percentage, 2) }}%</div>
                                                     @endif
                                                 </td>
                                             @endforeach
@@ -513,7 +513,7 @@
                                                         placeholder="0"
                                                     >
                                                     @if(isset($gradeRecord) && $gradeRecord && isset($gradeRecord->percentage))
-                                                        <div class="text-xs text-gray-500 mt-1">{{ number_format($gradeRecord->percentage, 1) }}%</div>
+                                                        <div class="text-xs text-gray-500 mt-1">{{ number_format($gradeRecord->percentage, 2) }}%</div>
                                                     @endif
                                                 </td>
                                             @endforeach
@@ -552,7 +552,7 @@
                                             </div>
                                             @if($totalPossible > 0)
                                                 <div class="text-xs text-gray-500 mt-1">
-                                                    {{ number_format(($totalScore / $totalPossible) * 100, 1) }}%
+                                                    {{ number_format(($totalScore / $totalPossible) * 100, 2) }}%
                                                 </div>
                                             @endif
                                         </td>
@@ -566,33 +566,44 @@
                                         
                                         <!-- Exam Score (Manual Input) -->
                                         <td class="px-6 py-4 text-center bg-yellow-25 border-l border-yellow-200">
-                                            <input 
-                                                type="number" 
-                                                class="w-20 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 exam-score-input"
-                                                data-student-mapping-id="{{ $studentMapping->id }}"
-                                                data-subject-id="{{ $subject->id }}"
-                                                data-term="{{ $term }}"
-                                                data-exam-max-score="100"
-                                                value="{{ isset($termGrade) && $termGrade && isset($termGrade->exam_score) ? $termGrade->exam_score : '' }}"
-                                                min="0"
-                                                max="100"
-                                                step="0.01"
-                                                placeholder="0"
-                                            >
-                                            <div class="text-xs text-gray-500 mt-1">/100</div>
+                                            <div class="flex items-center justify-center gap-1">
+                                                <input 
+                                                    type="number" 
+                                                    class="w-16 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 exam-score-input"
+                                                    data-student-mapping-id="{{ $studentMapping->id }}"
+                                                    data-subject-id="{{ $subject->id }}"
+                                                    data-term="{{ $term }}"
+                                                    value="{{ isset($termGrade) && $termGrade && isset($termGrade->exam_score) ? $termGrade->exam_score : '' }}"
+                                                    min="0"
+                                                    step="0.01"
+                                                    placeholder="0"
+                                                >
+                                                <span class="text-gray-500">/</span>
+                                                <input 
+                                                    type="number" 
+                                                    class="w-16 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 exam-max-score-input"
+                                                    data-student-mapping-id="{{ $studentMapping->id }}"
+                                                    data-subject-id="{{ $subject->id }}"
+                                                    data-term="{{ $term }}"
+                                                    value="{{ isset($termGrade) && $termGrade && isset($termGrade->exam_max_score) ? $termGrade->exam_max_score : 100 }}"
+                                                    min="1"
+                                                    step="0.01"
+                                                    placeholder="100"
+                                                >
+                                            </div>
                                         </td>
                                         
                                         <!-- Exam Grade (Auto-calculated) -->
                                         <td class="px-6 py-4 text-center bg-orange-25 border-l border-orange-200">
                                             <div class="text-sm font-medium text-gray-900">
-                                                {{ isset($termGrade) && $termGrade && isset($termGrade->exam_grade) ? round($termGrade->exam_grade) : '-' }}
+                                                {{ isset($termGrade) && $termGrade && isset($termGrade->exam_grade) ? number_format($termGrade->exam_grade, 2) : '-' }}
                                             </div>
                                         </td>
                                         
                                         <!-- Term Grade (Auto-calculated) -->
                                         <td class="px-6 py-4 text-center bg-red-25 border-l border-red-200">
                                             <div class="text-sm font-bold text-red-600">
-                                                {{ isset($termGrade) && $termGrade && isset($termGrade->term_grade) ? round($termGrade->term_grade) : '-' }}
+                                                {{ isset($termGrade) && $termGrade && isset($termGrade->term_grade) ? number_format($termGrade->term_grade, 0) : '-' }}
                                             </div>
                                         </td>
                                     </tr>
@@ -839,6 +850,34 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Handle exam max score inputs
+    const examMaxScoreInputs = document.querySelectorAll('.exam-max-score-input');
+    examMaxScoreInputs.forEach(input => {
+        const inputKey = `exam-max-${input.dataset.studentMappingId}-${input.dataset.term}`;
+        
+        // Save only on Enter key or blur (if changed)
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveExamScore(this.closest('td').querySelector('.exam-score-input'));
+            }
+        });
+
+        input.addEventListener('blur', function() {
+            // Save the exam score when max score changes
+            const examScoreInput = this.closest('td').querySelector('.exam-score-input');
+            if (examScoreInput) {
+                saveExamScore(examScoreInput);
+            }
+        });
+
+        // Track changes
+        input.addEventListener('input', function() {
+            this.dataset.hasChanged = 'true';
+            this.classList.remove('saved', 'error', 'saving');
+            this.classList.add('pending');
+        });
+    });
 
     // Add input event listener to all activity grade inputs for dynamic calculation
     document.querySelectorAll('.activity-grade-input').forEach(input => {
@@ -878,7 +917,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (percentageDisplay && totalPossible > 0) {
             const percentage = (totalScore / totalPossible) * 100;
-            percentageDisplay.textContent = `${percentage.toFixed(1)}%`;
+            percentageDisplay.textContent = `${percentage.toFixed(2)}%`;
         }
     }
 
@@ -969,11 +1008,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const percentageDiv = input.parentElement.querySelector('.text-xs');
                 if (data.grade_record && data.grade_record.percentage !== null) {
                     if (percentageDiv) {
-                        percentageDiv.textContent = data.grade_record.percentage.toFixed(1) + '%';
+                        percentageDiv.textContent = data.grade_record.percentage.toFixed(2) + '%';
                     } else {
                         const newPercentageDiv = document.createElement('div');
                         newPercentageDiv.className = 'text-xs text-gray-500 mt-1';
-                        newPercentageDiv.textContent = data.grade_record.percentage.toFixed(1) + '%';
+                        newPercentageDiv.textContent = data.grade_record.percentage.toFixed(2) + '%';
                         input.parentElement.appendChild(newPercentageDiv);
                     }
                 } else if (percentageDiv) {
@@ -1027,8 +1066,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const examScore = input.value || null;
         const requestKey = `exam-${studentMappingId}-${term}`;
 
-        // Use fixed max score of 100
-        const examMaxScore = 100;
+        // Get max score from the adjacent input field
+        const examMaxScoreInput = input.closest('td').querySelector('.exam-max-score-input');
+        const examMaxScore = examMaxScoreInput ? parseFloat(examMaxScoreInput.value) || 100 : 100;
 
         // Prevent duplicate requests
         if (activeRequests.has(requestKey)) {
@@ -1104,9 +1144,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     examGradeCell.textContent = '-';
                 }
                 
-                // Update term grade with 2 decimals
+                // Update term grade with 0 decimals (whole number)
                 if (data.term_grade && data.term_grade.term_grade !== null) {
-                    termGradeCell.textContent = parseFloat(data.term_grade.term_grade).toFixed(2);
+                    termGradeCell.textContent = parseFloat(data.term_grade.term_grade).toFixed(0);
                 } else {
                     termGradeCell.textContent = '-';
                 }

@@ -816,32 +816,52 @@ class GradeController extends Controller
      */
     private function recalculateTermGradesForTerm(Subject $subject, string $term): void
     {
-        // Get all term grades for this subject and term
-        $termGrades = TermGrade::where('subject_id', $subject->id)
+        // Get grading configuration for this term
+        $gradingConfig = \App\Models\GradingConfig::where('subject_id', $subject->id)
             ->where('term', $term)
-            ->whereNotNull('class_standing')
-            ->whereNotNull('exam_score')
-            ->get();
+            ->first();
 
-        $classWeight = $classStandingWeight / 100;
-        $examWeightDecimal = $examWeight / 100;
+        if (!$gradingConfig) {
+            return; // No config, nothing to recalculate
+        }
 
-        foreach ($termGrades as $termGrade) {
-            // Calculate exam percentage: (score / max_score) × 100
-            $examMaxScore = $termGrade->exam_max_score ?? 100;
-            $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
-            
-            // Calculate exam grade as weighted percentage
-            // Exam Grade = Percentage × Exam Weight %
-            $examGrade = $examPercentage * $examWeightDecimal;
+        $classStandingWeight = $gradingConfig->class_standing_weight;
+        $examWeight = $gradingConfig->exam_weight;
 
-            // Calculate term grade (class standing + exam grade)
-            $termGradeValue = $termGrade->class_standing + $examGrade;
+        // Get all student mappings for this subject
+        $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
 
-            $termGrade->update([
-                'exam_grade' => round($examGrade, 2),
-                'term_grade' => round($termGradeValue, 2),
-            ]);
+        foreach ($studentMappings as $studentMapping) {
+            // Recalculate class standing for this student and term
+            $this->recalculateClassStanding($studentMapping, $term);
+
+            // Get the term grade record
+            $termGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+                ->where('subject_id', $subject->id)
+                ->where('term', $term)
+                ->first();
+
+            // Recalculate term grade if we have both class standing and exam score
+            if ($termGrade && $termGrade->class_standing !== null && $termGrade->exam_score !== null) {
+                $classWeight = $classStandingWeight / 100;
+                $examWeightDecimal = $examWeight / 100;
+
+                // Calculate exam percentage: (score / max_score) × 100
+                $examMaxScore = $termGrade->exam_max_score ?? 100;
+                $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
+
+                // Calculate exam grade as weighted percentage
+                // Exam Grade = Percentage × Exam Weight %
+                $examGrade = $examPercentage * $examWeightDecimal;
+
+                // Calculate term grade (class standing + exam grade)
+                $termGradeValue = $termGrade->class_standing + $examGrade;
+
+                $termGrade->update([
+                    'exam_grade' => round($examGrade, 2),
+                    'term_grade' => round($termGradeValue, 2),
+                ]);
+            }
         }
     }
 
@@ -850,6 +870,17 @@ class GradeController extends Controller
      */
     private function recalculateFinalRatings(Subject $subject): void
     {
+        // Get the final rating config from the subject
+        $config = $subject->final_rating_config ?? [
+            'prelim_weight' => 30,
+            'midterm_weight' => 30,
+            'finals_weight' => 40
+        ];
+
+        $prelimWeight = $config['prelim_weight'];
+        $midtermWeight = $config['midterm_weight'];
+        $finalsWeight = $config['finals_weight'];
+
         // Get all student mappings for this subject
         $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
 

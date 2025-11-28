@@ -198,11 +198,11 @@
                                 @if($prelimGrade && $prelimGrade->term_grade !== null)
                                     <div class="space-y-1">
                                         <div class="text-2xl font-bold text-blue-900">
-                                            {{ round($prelimGrade->term_grade) }}
+                                            {{ number_format($prelimGrade->term_grade, 0) }}
                                         </div>
                                         <div class="text-xs text-gray-500">
-                                            CS: {{ round($prelimGrade->class_standing) }} | 
-                                            Exam: {{ round($prelimGrade->exam_score ?? 0) }}
+                                            CS: {{ number_format($prelimGrade->class_standing, 2) }} | 
+                                            Exam: {{ number_format($prelimGrade->exam_score ?? 0, 0) }}
                                         </div>
                                     </div>
                                 @else
@@ -215,11 +215,11 @@
                                 @if($midtermGrade && $midtermGrade->term_grade !== null)
                                     <div class="space-y-1">
                                         <div class="text-2xl font-bold text-green-900">
-                                            {{ round($midtermGrade->term_grade) }}
+                                            {{ number_format($midtermGrade->term_grade, 0) }}
                                         </div>
                                         <div class="text-xs text-gray-500">
-                                            CS: {{ round($midtermGrade->class_standing) }} | 
-                                            Exam: {{ round($midtermGrade->exam_score ?? 0) }}
+                                            CS: {{ number_format($midtermGrade->class_standing, 2) }} | 
+                                            Exam: {{ number_format($midtermGrade->exam_score ?? 0, 0) }}
                                         </div>
                                     </div>
                                 @else
@@ -232,11 +232,11 @@
                                 @if($finalsGrade && $finalsGrade->term_grade !== null)
                                     <div class="space-y-1">
                                         <div class="text-2xl font-bold text-purple-900">
-                                            {{ round($finalsGrade->term_grade) }}
+                                            {{ number_format($finalsGrade->term_grade, 0) }}
                                         </div>
                                         <div class="text-xs text-gray-500">
-                                            CS: {{ round($finalsGrade->class_standing) }} | 
-                                            Exam: {{ round($finalsGrade->exam_score ?? 0) }}
+                                            CS: {{ number_format($finalsGrade->class_standing, 2) }} | 
+                                            Exam: {{ number_format($finalsGrade->exam_score ?? 0, 0) }}
                                         </div>
                                     </div>
                                 @else
@@ -249,7 +249,7 @@
                                 @if($finalGrade !== null)
                                     <div class="space-y-1">
                                         <div class="text-3xl font-bold text-teal-900">
-                                            {{ round($finalGrade) }}
+                                            {{ number_format($finalGrade, 2) }}
                                         </div>
                                         <div class="text-xs font-medium" style="color: #08695A;">
                                             @if($finalGrade >= 75)

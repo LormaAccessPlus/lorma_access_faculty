@@ -4,10 +4,12 @@
 When changing the grading formula (term weights or final rating weights), the grades were not updating automatically. Users had to manually re-enter activity scores to trigger recalculation, which was frustrating and inefficient.
 
 ## Root Cause
-The `saveGradingConfig()` and `saveFinalRatingConfig()` methods in `GradeController.php` were calling recalculation methods (`recalculateTermGradesForTerm()` and `recalculateFinalRatings()`), but these methods had incorrect signatures and implementations:
+The `saveGradingConfig()` and `saveFinalRatingConfig()` methods in `GradeController.php` were calling recalculation methods (`recalculateTermGradesForTerm()` and `recalculateFinalRatings()`), but these methods had critical bugs:
 
-1. **recalculateTermGradesForTerm()** - Had parameters for weights that should have been read from the database
-2. **recalculateFinalRatings()** - Had parameters for weights that should have been read from the subject's config
+1. **recalculateTermGradesForTerm()** - Was using undefined variables `$classStandingWeight` and `$examWeight` instead of reading from the database
+2. **recalculateFinalRatings()** - Was using undefined variables `$prelimWeight`, `$midtermWeight`, and `$finalsWeight` instead of reading from the subject's config
+
+This caused PHP errors and prevented automatic grade recalculation when formulas were changed.
 
 ## Solution
 Fixed both recalculation methods to:
