@@ -414,8 +414,8 @@
                                 <th rowspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-green-50 border-l border-green-200 min-w-32">
                                     Class Standing
                                 </th>
-                                <th colspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 border-l border-yellow-200">
-                                    Exam
+                                <th rowspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 border-l border-yellow-200 min-w-32">
+                                    Exam Score
                                 </th>
                                 <th rowspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-orange-50 border-l border-orange-200 min-w-32">
                                     Exam Grade
@@ -451,12 +451,6 @@
                                         </th>
                                     @endforeach
                                 @endif
-                                <th class="px-3 py-2 text-center text-xs font-medium text-yellow-600 bg-yellow-25 border-l border-yellow-100 min-w-20">
-                                    Score
-                                </th>
-                                <th class="px-3 py-2 text-center text-xs font-medium text-yellow-600 bg-yellow-25 border-l border-yellow-100 min-w-20">
-                                    Max
-                                </th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -571,33 +565,21 @@
                                         </td>
                                         
                                         <!-- Exam Score (Manual Input) -->
-                                        <td class="px-4 py-4 text-center bg-yellow-25 border-l border-yellow-200">
+                                        <td class="px-6 py-4 text-center bg-yellow-25 border-l border-yellow-200">
                                             <input 
                                                 type="number" 
-                                                class="w-16 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 exam-score-input"
+                                                class="w-20 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 exam-score-input"
                                                 data-student-mapping-id="{{ $studentMapping->id }}"
                                                 data-subject-id="{{ $subject->id }}"
                                                 data-term="{{ $term }}"
+                                                data-exam-max-score="100"
                                                 value="{{ isset($termGrade) && $termGrade && isset($termGrade->exam_score) ? $termGrade->exam_score : '' }}"
                                                 min="0"
+                                                max="100"
                                                 step="0.01"
                                                 placeholder="0"
                                             >
-                                        </td>
-                                        
-                                        <!-- Exam Max Score (Manual Input) -->
-                                        <td class="px-4 py-4 text-center bg-yellow-25 border-l border-yellow-100">
-                                            <input 
-                                                type="number" 
-                                                class="w-16 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 exam-max-score-input"
-                                                data-student-mapping-id="{{ $studentMapping->id }}"
-                                                data-subject-id="{{ $subject->id }}"
-                                                data-term="{{ $term }}"
-                                                value="{{ isset($termGrade) && $termGrade && isset($termGrade->exam_max_score) ? $termGrade->exam_max_score : 100 }}"
-                                                min="1"
-                                                step="0.01"
-                                                placeholder="100"
-                                            >
+                                            <div class="text-xs text-gray-500 mt-1">/100</div>
                                         </td>
                                         
                                         <!-- Exam Grade (Auto-calculated) -->
@@ -857,49 +839,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Handle exam max score inputs
-    const examMaxScoreInputs = document.querySelectorAll('.exam-max-score-input');
-    examMaxScoreInputs.forEach(input => {
-        const inputKey = `exam-max-${input.dataset.studentMappingId}-${input.dataset.term}`;
-        
-        // Save only on Enter key or blur (if changed)
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                // Find the corresponding exam score input and save
-                const row = this.closest('tr');
-                const examScoreInput = row.querySelector('.exam-score-input');
-                if (examScoreInput) {
-                    saveExamScore(examScoreInput);
-                }
-            }
-        });
 
-        input.addEventListener('blur', function() {
-            // Only save if there's been a change
-            if (this.dataset.hasChanged === 'true') {
-                const row = this.closest('tr');
-                const examScoreInput = row.querySelector('.exam-score-input');
-                if (examScoreInput) {
-                    saveExamScore(examScoreInput);
-                }
-            }
-        });
-
-        // Track changes without auto-saving
-        input.addEventListener('input', function() {
-            this.dataset.hasChanged = 'true';
-            // Clear any existing timeout
-            if (saveTimeouts.has(inputKey)) {
-                clearTimeout(saveTimeouts.get(inputKey));
-                saveTimeouts.delete(inputKey);
-            }
-            // Remove any previous states and add pending state
-            this.classList.remove('saved', 'error', 'saving');
-            this.classList.add('pending');
-        });
-    });
-    
     // Add input event listener to all activity grade inputs for dynamic calculation
     document.querySelectorAll('.activity-grade-input').forEach(input => {
         input.addEventListener('input', function() {
@@ -975,20 +915,37 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const csrfToken = document.querySelector('meta[name="csrf-token"]');
         console.log('CSRF Token exists:', !!csrfToken);
+        console.log('CSRF Token value:', csrfToken ? csrfToken.getAttribute('content') : 'MISSING');
+        
+        // Check if CSRF token is missing
+        if (!csrfToken || !csrfToken.getAttribute('content')) {
+            activeRequests.delete(requestKey);
+            input.classList.remove('saving');
+            input.classList.add('error');
+            showNotification('Security token missing. Please refresh the page.', 'error');
+            return;
+        }
+        
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
         fetch('{{ route("grades.update") }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken ? csrfToken.getAttribute('content') : '',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({
                 student_mapping_id: studentMappingId,
                 activity_id: activityId,
                 score: score
-            })
+            }),
+            signal: controller.signal
         })
+        .finally(() => clearTimeout(timeoutId))
         .then(response => {
             console.log('Response received:', response.status, response.statusText);
             
@@ -1049,10 +1006,12 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             let errorMessage = 'Failed to save grade. ';
-            if (error.message.includes('HTTP')) {
+            if (error.name === 'AbortError') {
+                errorMessage += 'Request timeout - server took too long to respond.';
+            } else if (error.message.includes('HTTP')) {
                 errorMessage += error.message;
-            } else if (error.name === 'TypeError') {
-                errorMessage += 'Network error - please check your connection.';
+            } else if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
+                errorMessage += 'Network error - please check your connection or try refreshing the page.';
             } else {
                 errorMessage += error.message;
             }
@@ -1068,10 +1027,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const examScore = input.value || null;
         const requestKey = `exam-${studentMappingId}-${term}`;
 
-        // Get the exam max score from the adjacent input
-        const row = input.closest('tr');
-        const examMaxScoreInput = row.querySelector('.exam-max-score-input');
-        const examMaxScore = examMaxScoreInput ? (examMaxScoreInput.value || 100) : 100;
+        // Use fixed max score of 100
+        const examMaxScore = 100;
 
         // Prevent duplicate requests
         if (activeRequests.has(requestKey)) {

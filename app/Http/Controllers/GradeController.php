@@ -201,7 +201,7 @@ class GradeController extends Controller
         }
 
         // Recalculate all term grades for this term with the new formula
-        $this->recalculateTermGradesForTerm($subject, $request->term, $request->class_standing_weight, $request->exam_weight);
+        $this->recalculateTermGradesForTerm($subject, $request->term);
 
         return response()->json([
             'success' => true,
@@ -238,7 +238,7 @@ class GradeController extends Controller
         ]);
 
         // Recalculate final ratings for all students with the new weights
-        $this->recalculateFinalRatings($subject, $request->prelim_weight, $request->midterm_weight, $request->finals_weight);
+        $this->recalculateFinalRatings($subject);
 
         return response()->json([
             'success' => true,
@@ -465,21 +465,17 @@ class GradeController extends Controller
         $examMaxScore = $termGrade->exam_max_score ?? 100;
         $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
         
-        if ($termGrade->term === 'prelim') {
-            // Prelim: Class standing percentage directly, exam grade = exam percentage
-            $examGrade = $examPercentage;
-            $termGradeValue = ($termGrade->class_standing * $classWeight) + 
-                             ($examGrade * $examWeight);
-        } else {
-            // Midterm/Finals: Class standing already transformed, exam grade = (percentage/100) × 50 + 50
-            $examGrade = ($examPercentage / 100) * 50 + 50;
-            $termGradeValue = ($termGrade->class_standing * $classWeight) + 
-                             ($examGrade * $examWeight);
-        }
+        // Calculate exam grade as weighted percentage
+        // Exam Grade = Percentage × Exam Weight %
+        // Example: 60% × 60% = 36
+        $examGrade = $examPercentage * ($examWeight);
+        
+        // Calculate term grade
+        $termGradeValue = $termGrade->class_standing + $examGrade;
 
         $termGrade->update([
-            'exam_grade' => round($examGrade),
-            'term_grade' => round($termGradeValue),
+            'exam_grade' => round($examGrade, 2),
+            'term_grade' => round($termGradeValue, 2),
         ]);
 
         return $termGrade->fresh();
@@ -508,15 +504,21 @@ class GradeController extends Controller
             return;
         }
 
+        // Get grading configuration to get the activity weight
+        $gradingConfig = \App\Models\GradingConfig::where('subject_id', $studentMapping->subject_id)
+            ->where('term', $term)
+            ->first();
+        
+        // Get activity weight (default to 40% if not configured)
+        $activityWeight = $gradingConfig ? $gradingConfig->class_standing_weight : 40;
+        
         // Calculate class standing percentage
         $classStandingPercentage = ($totalScore / $totalPossible) * 100;
 
-        // For midterm and finals, apply the transformation: (score/items) × 50 + 50
-        if ($term !== 'prelim') {
-            $classStanding = ($classStandingPercentage / 100) * 50 + 50;
-        } else {
-            $classStanding = $classStandingPercentage;
-        }
+        // Apply the activity weight to get the class standing
+        // Class Standing = Percentage × Activity Weight %
+        // Example: 75.3% × 40% = 30.13
+        $classStanding = $classStandingPercentage * ($activityWeight / 100);
 
         // Update or create term grade record
         $termGrade = TermGrade::updateOrCreate(
@@ -526,7 +528,7 @@ class GradeController extends Controller
                 'term' => $term,
             ],
             [
-                'class_standing' => round($classStanding),
+                'class_standing' => round($classStanding, 2),
             ]
         );
 
@@ -812,7 +814,7 @@ class GradeController extends Controller
     /**
      * Recalculate all term grades for a specific term with new formula weights
      */
-    private function recalculateTermGradesForTerm(Subject $subject, string $term, float $classStandingWeight, float $examWeight): void
+    private function recalculateTermGradesForTerm(Subject $subject, string $term): void
     {
         // Get all term grades for this subject and term
         $termGrades = TermGrade::where('subject_id', $subject->id)
@@ -829,21 +831,16 @@ class GradeController extends Controller
             $examMaxScore = $termGrade->exam_max_score ?? 100;
             $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
             
-            // Recalculate exam grade based on term
-            if ($term === 'prelim') {
-                $examGrade = $examPercentage;
-            } else {
-                // Midterm/Finals: exam grade = (percentage/100) × 50 + 50
-                $examGrade = ($examPercentage / 100) * 50 + 50;
-            }
+            // Calculate exam grade as weighted percentage
+            // Exam Grade = Percentage × Exam Weight %
+            $examGrade = $examPercentage * $examWeightDecimal;
 
-            // Calculate new term grade with updated weights
-            $termGradeValue = ($termGrade->class_standing * $classWeight) + 
-                             ($examGrade * $examWeightDecimal);
+            // Calculate term grade (class standing + exam grade)
+            $termGradeValue = $termGrade->class_standing + $examGrade;
 
             $termGrade->update([
-                'exam_grade' => round($examGrade),
-                'term_grade' => round($termGradeValue),
+                'exam_grade' => round($examGrade, 2),
+                'term_grade' => round($termGradeValue, 2),
             ]);
         }
     }
@@ -851,7 +848,7 @@ class GradeController extends Controller
     /**
      * Recalculate final ratings for all students with new term weights
      */
-    private function recalculateFinalRatings(Subject $subject, float $prelimWeight, float $midtermWeight, float $finalsWeight): void
+    private function recalculateFinalRatings(Subject $subject): void
     {
         // Get all student mappings for this subject
         $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
@@ -885,7 +882,7 @@ class GradeController extends Controller
                 // Update final rating in one of the term grades (or create a separate final rating record)
                 // For now, we'll store it in the finals term grade
                 $finalsGrade->update([
-                    'final_rating' => round($finalRating)
+                    'final_rating' => round($finalRating, 2)
                 ]);
             }
         }
