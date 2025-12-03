@@ -18,27 +18,35 @@ class DashboardController extends Controller
     {
         $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
         
-        // Get dashboard statistics
-        $stats = $this->getDashboardStats($faculty->id);
+        // Get current academic year and semester
+        $currentAcademicYear = config('app.current_academic_year', '2024-2025');
+        $currentSemester = config('app.current_semester', '1');
         
-        // Get recent subjects
+        // Get dashboard statistics (filtered by current semester)
+        $stats = $this->getDashboardStats($faculty->id, $currentAcademicYear, $currentSemester);
+        
+        // Get recent subjects (from current semester only)
         $recentSubjects = Subject::where('faculty_id', $faculty->id)
+            ->where('academic_year', $currentAcademicYear)
+            ->where('semester', $currentSemester)
             ->with(['activities'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
         
-        // Get recent activities
-        $recentActivities = Activity::whereHas('subject', function($query) use ($faculty) {
-                $query->where('faculty_id', $faculty->id);
+        // Get recent activities (from current semester subjects only)
+        $recentActivities = Activity::whereHas('subject', function($query) use ($faculty, $currentAcademicYear, $currentSemester) {
+                $query->where('faculty_id', $faculty->id)
+                    ->where('academic_year', $currentAcademicYear)
+                    ->where('semester', $currentSemester);
             })
             ->with('subject')
             ->orderBy('created_at', 'desc')
             ->limit(5)
             ->get();
         
-        // Get subjects that need attention (no activities, no student mappings, etc.)
-        $subjectsNeedingAttention = $this->getSubjectsNeedingAttention($faculty->id);
+        // Get subjects that need attention (from current semester only)
+        $subjectsNeedingAttention = $this->getSubjectsNeedingAttention($faculty->id, $currentAcademicYear, $currentSemester);
         
         return view('dashboard', compact(
             'faculty',
@@ -52,28 +60,41 @@ class DashboardController extends Controller
     /**
      * Get dashboard statistics
      */
-    private function getDashboardStats(int $facultyId): array
+    private function getDashboardStats(int $facultyId, string $academicYear, string $semester): array
     {
-        $totalSubjects = Subject::where('faculty_id', $facultyId)->count();
+        $totalSubjects = Subject::where('faculty_id', $facultyId)
+            ->where('academic_year', $academicYear)
+            ->where('semester', $semester)
+            ->count();
         
-        $totalActivities = Activity::whereHas('subject', function($query) use ($facultyId) {
-            $query->where('faculty_id', $facultyId);
+        $totalActivities = Activity::whereHas('subject', function($query) use ($facultyId, $academicYear, $semester) {
+            $query->where('faculty_id', $facultyId)
+                ->where('academic_year', $academicYear)
+                ->where('semester', $semester);
         })->count();
         
         $connectedSubjects = Subject::where('faculty_id', $facultyId)
+            ->where('academic_year', $academicYear)
+            ->where('semester', $semester)
             ->whereNotNull('gcr_class_id')
             ->count();
         
-        $totalMappings = StudentMapping::whereHas('subject', function($query) use ($facultyId) {
-            $query->where('faculty_id', $facultyId);
+        $totalMappings = StudentMapping::whereHas('subject', function($query) use ($facultyId, $academicYear, $semester) {
+            $query->where('faculty_id', $facultyId)
+                ->where('academic_year', $academicYear)
+                ->where('semester', $semester);
         })->count();
         
-        $mappedStudents = StudentMapping::whereHas('subject', function($query) use ($facultyId) {
-            $query->where('faculty_id', $facultyId);
-        })->whereNotNull('school_student_id')->count();
+        $mappedStudents = StudentMapping::whereHas('subject', function($query) use ($facultyId, $academicYear, $semester) {
+            $query->where('faculty_id', $facultyId)
+                ->where('academic_year', $academicYear)
+                ->where('semester', $semester);
+        })->whereNotNull('student_id')->count();
         
-        $activitiesByTerm = Activity::whereHas('subject', function($query) use ($facultyId) {
-            $query->where('faculty_id', $facultyId);
+        $activitiesByTerm = Activity::whereHas('subject', function($query) use ($facultyId, $academicYear, $semester) {
+            $query->where('faculty_id', $facultyId)
+                ->where('academic_year', $academicYear)
+                ->where('semester', $semester);
         })
         ->select('term', DB::raw('count(*) as count'))
         ->groupBy('term')
@@ -96,9 +117,11 @@ class DashboardController extends Controller
     /**
      * Get subjects that need attention
      */
-    private function getSubjectsNeedingAttention(int $facultyId): array
+    private function getSubjectsNeedingAttention(int $facultyId, string $academicYear, string $semester): array
     {
         $subjects = Subject::where('faculty_id', $facultyId)
+            ->where('academic_year', $academicYear)
+            ->where('semester', $semester)
             ->with(['activities', 'studentMappings'])
             ->get();
         
@@ -123,7 +146,7 @@ class DashboardController extends Controller
             } else {
                 // Check for unmapped students
                 $unmappedCount = $subject->studentMappings()
-                    ->whereNull('school_student_id')
+                    ->whereNull('student_id')
                     ->count();
                 if ($unmappedCount > 0) {
                     $issues[] = "{$unmappedCount} students not mapped";

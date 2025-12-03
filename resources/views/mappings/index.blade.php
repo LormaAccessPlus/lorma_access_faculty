@@ -52,7 +52,7 @@
                             Student Name
                         </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Email
+                            ID Number
                         </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             School Student
@@ -75,13 +75,15 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm text-gray-500">
-                                    {{ $mapping->student_email ?? 'N/A' }}
+                                    {{ $mapping->student ? $mapping->student->student_number : 'N/A' }}
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm text-gray-900">
-                                    @if($mapping->school_student_id)
-                                        <span class="text-green-600">Mapped (ID: {{ $mapping->school_student_id }})</span>
+                                    @if($mapping->student_id)
+                                        <span class="text-green-600">
+                                            {{ $mapping->student ? $mapping->student->full_name : 'Mapped (ID: ' . $mapping->student_id . ')' }}
+                                        </span>
                                     @else
                                         <span class="text-red-600">Not Mapped</span>
                                     @endif
@@ -181,7 +183,7 @@ async function editMapping(mappingId) {
             data.students.forEach(student => {
                 const option = document.createElement('option');
                 option.value = student.id;
-                option.textContent = `${student.full_name} (${student.email})`;
+                option.textContent = `${student.full_name} (ID: ${student.student_number})`;
                 select.appendChild(option);
             });
         }
@@ -212,7 +214,7 @@ document.getElementById('editMappingForm').addEventListener('submit', async func
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             },
             body: JSON.stringify({
-                school_student_id: schoolStudentId || null
+                student_id: schoolStudentId || null
             })
         });
         

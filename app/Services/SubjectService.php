@@ -20,15 +20,30 @@ class SubjectService
      */
     public function getCurrentSemesterSubjects(int $facultyId): Collection
     {
-        $currentYear = Carbon::now()->year;
-        $currentMonth = Carbon::now()->month;
+        // Get current academic year and semester from config (with school database as fallback)
+        $currentAcademicYear = config('app.current_academic_year');
+        $currentSemester = config('app.current_semester');
         
-        // Determine current semester based on month
-        $currentSemester = $this->getCurrentSemester($currentMonth);
-        $academicYear = $this->getAcademicYear($currentYear, $currentMonth);
+        // If not set in config, try to get from school database settings
+        if (!$currentAcademicYear) {
+            $currentAcademicYear = DB::connection('school_db')->table('currentsettings')
+                ->where('Setting', 'schoolyear')
+                ->value('Value') ?? $this->getAcademicYear(Carbon::now()->year, Carbon::now()->month);
+        }
+        
+        if (!$currentSemester) {
+            $currentSemester = DB::connection('school_db')->table('currentsettings')
+                ->where('Setting', 'terms')
+                ->value('Value') ?? '1';
+            
+            // Extract just the semester number (e.g., "1-Sem" -> "1")
+            if (preg_match('/^(\d+)/', $currentSemester, $matches)) {
+                $currentSemester = $matches[1];
+            }
+        }
 
         return Subject::where('faculty_id', $facultyId)
-            ->where('academic_year', $academicYear)
+            ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->with(['activities'])
             ->orderBy('subject_code')
@@ -41,18 +56,36 @@ class SubjectService
      */
     public function getPastSemesterSubjects(int $facultyId): Collection
     {
-        $currentYear = Carbon::now()->year;
-        $currentMonth = Carbon::now()->month;
+        // Get current academic year and semester from config (with school database as fallback)
+        $currentAcademicYear = config('app.current_academic_year');
+        $currentSemester = config('app.current_semester');
         
-        $currentSemester = $this->getCurrentSemester($currentMonth);
-        $academicYear = $this->getAcademicYear($currentYear, $currentMonth);
+        // If not set in config, try to get from school database settings
+        if (!$currentAcademicYear) {
+            $currentAcademicYear = DB::connection('school_db')->table('currentsettings')
+                ->where('Setting', 'schoolyear')
+                ->value('Value') ?? $this->getAcademicYear(Carbon::now()->year, Carbon::now()->month);
+        }
+        
+        if (!$currentSemester) {
+            $currentSemester = DB::connection('school_db')->table('currentsettings')
+                ->where('Setting', 'terms')
+                ->value('Value') ?? '1';
+            
+            // Extract just the semester number (e.g., "1-Sem" -> "1")
+            if (preg_match('/^(\d+)/', $currentSemester, $matches)) {
+                $currentSemester = $matches[1];
+            }
+        }
 
         return Subject::where('faculty_id', $facultyId)
-            ->where(function ($query) use ($academicYear, $currentSemester) {
-                $query->where('academic_year', '<', $academicYear)
-                    ->orWhere(function ($q) use ($academicYear, $currentSemester) {
-                        $q->where('academic_year', $academicYear)
-                          ->where('semester', '<>', $currentSemester);
+            ->where(function ($query) use ($currentAcademicYear, $currentSemester) {
+                // Get subjects from previous academic years
+                $query->where('academic_year', '!=', $currentAcademicYear)
+                    // Or subjects from current academic year but different semester
+                    ->orWhere(function ($q) use ($currentAcademicYear, $currentSemester) {
+                        $q->where('academic_year', $currentAcademicYear)
+                          ->where('semester', '!=', $currentSemester);
                     });
             })
             ->with(['activities'])

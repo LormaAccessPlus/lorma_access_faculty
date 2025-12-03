@@ -49,7 +49,14 @@ class GoogleAuthController extends Controller
     public function handleGoogleCallback(Request $request)
     {
         try {
-            $googleUser = Socialite::driver('google')->user();
+            // Check if there's an error from Google
+            if ($request->has('error')) {
+                Log::warning('Google OAuth error: ' . $request->get('error'));
+                return redirect()->route('auth.login')
+                    ->with('error', 'Authentication cancelled or failed. Please try again.');
+            }
+
+            $googleUser = Socialite::driver('google')->stateless()->user();
             
             // Validate @lorma.edu domain
             if (!$this->isValidDomain($googleUser->getEmail())) {
@@ -72,8 +79,13 @@ class GoogleAuthController extends Controller
             return redirect()->intended(route('dashboard'))
                 ->with('success', 'Welcome, ' . $faculty->name . '!');
                 
+        } catch (\Laravel\Socialite\Two\InvalidStateException $e) {
+            Log::error('Invalid state exception (possible session issue): ' . $e->getMessage());
+            return redirect()->route('auth.login')
+                ->with('error', 'Session expired. Please try logging in again.');
         } catch (Exception $e) {
             Log::error('Google OAuth callback failed: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return redirect()->route('auth.login')
                 ->with('error', 'Authentication failed. Please try again.');
         }

@@ -1,13 +1,17 @@
 @extends('layouts.admin')
 
-@section('title', 'Grading System')
+@section('title', 'Nursing Matrix')
 
-@section('page-title', 'Grading System')
+@section('page-title', 'Nursing Matrix')
 
 @section('breadcrumbs')
     <li class="flex items-center">
         <i class="fas fa-chevron-right text-xs mx-2"></i>
-        <span>Grading System</span>
+        <span>Grade Matrix</span>
+    </li>
+    <li class="flex items-center">
+        <i class="fas fa-chevron-right text-xs mx-2"></i>
+        <span>Nursing Matrix</span>
     </li>
 @endsection
 
@@ -17,8 +21,8 @@
     <div class="bg-white rounded-lg shadow-sm p-6">
         <div class="flex items-center justify-between">
             <div>
-                <h2 class="text-2xl font-bold text-gray-900">Grading System</h2>
-                <p class="mt-1 text-sm text-gray-600">Manage grades for your subjects</p>
+                <h2 class="text-2xl font-bold text-gray-900">Nursing Matrix</h2>
+                <p class="mt-1 text-sm text-gray-600">Manage grades for nursing programs with specialized grading criteria</p>
             </div>
             <div class="flex items-center space-x-2">
                 <span class="px-3 py-1 text-sm font-medium text-teal-800 bg-teal-100 rounded-full">
@@ -36,7 +40,7 @@
             </div>
             <h3 class="text-lg font-medium text-gray-900 mb-2">No Subjects Available</h3>
             <p class="text-gray-600 mb-6">You need to map subjects before you can manage grades.</p>
-            <a href="{{ route('subjects.mapping.index') }}" 
+            <a href="{{ route('classroom.index') }}" 
                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:opacity-90 transition-opacity"
                style="background-color: #08695A;">
                 <i class="fas fa-link mr-2"></i>
@@ -79,7 +83,7 @@
 
                         <!-- Actions -->
                         <div class="space-y-2">
-                            <a href="{{ route('grades.matrix', $subject) }}" 
+                            <a href="{{ route('grade-matrix.nursing.matrix', $subject) }}" 
                                class="flex items-center justify-between px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
                                style="background-color: #08695A;"
                                onmouseover="this.style.backgroundColor='#065A4A';"
@@ -87,9 +91,14 @@
                                 <span><i class="fas fa-table mr-2"></i>Full Grade Matrix</span>
                                 <i class="fas fa-arrow-right text-xs"></i>
                             </a>
-                            <a href="{{ route('grades.term', $subject) }}" 
+                            <a href="{{ route('grade-matrix.nursing.term', $subject) }}" 
                                class="flex items-center justify-between px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
                                 <span><i class="fas fa-edit mr-2"></i>Edit Term Grades</span>
+                                <i class="fas fa-arrow-right text-xs"></i>
+                            </a>
+                            <a href="{{ route('nursing.comprehensive-exam.index', $subject) }}" 
+                               class="flex items-center justify-between px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors">
+                                <span><i class="fas fa-graduation-cap mr-2"></i>Comprehensive Exam</span>
                                 <i class="fas fa-arrow-right text-xs"></i>
                             </a>
                         </div>

@@ -65,7 +65,7 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => 'Asia/Manila',
 
     /*
     |--------------------------------------------------------------------------
@@ -122,5 +122,19 @@ return [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current Academic Period
+    |--------------------------------------------------------------------------
+    |
+    | These values define the current academic year and semester. This is used
+    | to filter subjects and assignments to show only those from the current
+    | academic period. Update these values at the start of each semester.
+    |
+    */
+
+    'current_academic_year' => env('CURRENT_ACADEMIC_YEAR', '2024-2025'),
+    'current_semester' => env('CURRENT_SEMESTER', '1'),
 
 ];

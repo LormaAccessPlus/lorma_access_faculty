@@ -96,16 +96,40 @@ class SubjectMappingService
                 }
             }
             
-            // Filter out subjects that are already mapped
-            $mappedSchoolSubjects = Subject::whereNotNull('school_subject_code')
-                ->where('academic_year', $academicYear)
-                ->where('semester', $semester)
+            // Get all subject codes that this faculty has already mapped (in any semester)
+            $existingSubjectCodes = Subject::where('faculty_id', $faculty->id)
+                ->pluck('subject_code')
+                ->toArray();
+            
+            // Also get school_subject_code in case it's different
+            $existingSchoolSubjectCodes = Subject::where('faculty_id', $faculty->id)
+                ->whereNotNull('school_subject_code')
                 ->pluck('school_subject_code')
                 ->toArray();
             
-            return array_filter($schoolSubjects, function($subject) use ($mappedSchoolSubjects) {
-                return !in_array($subject['subject_code'], $mappedSchoolSubjects);
-            });
+            // Combine both arrays
+            $allExistingCodes = array_merge($existingSubjectCodes, $existingSchoolSubjectCodes);
+            
+            Log::info('Filtering school subjects', [
+                'faculty_id' => $faculty->id,
+                'total_subjects' => count($schoolSubjects),
+                'existing_codes' => $allExistingCodes
+            ]);
+            
+            // Filter out subjects that already exist
+            $filteredSubjects = [];
+            foreach ($schoolSubjects as $subject) {
+                if (!in_array($subject['subject_code'], $allExistingCodes)) {
+                    $filteredSubjects[] = $subject;
+                }
+            }
+            
+            Log::info('Filtered school subjects result', [
+                'faculty_id' => $faculty->id,
+                'filtered_count' => count($filteredSubjects)
+            ]);
+            
+            return $filteredSubjects;
             
         } catch (Exception $e) {
             Log::error('Failed to get school database subjects', [

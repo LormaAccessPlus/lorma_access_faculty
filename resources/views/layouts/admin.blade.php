@@ -88,15 +88,58 @@
                             <span class="font-medium">Student Mapping</span>
                         </a>
 
-                        <!-- Grading System -->
-                        <a href="{{ route('grading-system.index') }}" 
-                           class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('grading-system.*') || request()->routeIs('grades.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
-                           style="{{ request()->routeIs('grading-system.*') || request()->routeIs('grades.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
-                           onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
-                           onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
-                            <i class="fas fa-calculator w-5 h-5 mr-3"></i>
-                            <span class="font-medium">Grading System</span>
-                        </a>
+                        <!-- Grade Matrix with Dropdown -->
+                        @php
+                            $isGradeMatrixActive = request()->routeIs('grade-matrix.*');
+                            $isZeroBasedActive = request()->routeIs('grade-matrix.zero-based*');
+                            $isNursingActive = request()->routeIs('grade-matrix.nursing*');
+                            $isGeneralEducationActive = request()->routeIs('grade-matrix.general-education*');
+                            $isCustomizedActive = request()->routeIs('grade-matrix.customized*');
+                        @endphp
+                        <div x-data="{ open: {{ $isGradeMatrixActive ? 'true' : 'false' }} }" class="space-y-1">
+                            <button @click="open = !open" 
+                                    class="flex items-center justify-between w-full px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ $isGradeMatrixActive ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
+                                    style="{{ $isGradeMatrixActive ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
+                                    onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
+                                    onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
+                                <div class="flex items-center">
+                                    <i class="fas fa-table-cells w-5 h-5 mr-3"></i>
+                                    <span class="font-medium">Grade Matrix</span>
+                                </div>
+                                <i class="fas fa-chevron-down text-xs transition-transform" :class="{ 'rotate-180': open }"></i>
+                            </button>
+                            
+                            <!-- Dropdown Menu -->
+                            <div x-show="open" 
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 transform scale-95"
+                                 x-transition:enter-end="opacity-100 transform scale-100"
+                                 x-transition:leave="transition ease-in duration-150"
+                                 x-transition:leave-start="opacity-100 transform scale-100"
+                                 x-transition:leave-end="opacity-0 transform scale-95"
+                                 class="ml-4 space-y-1">
+                                <a href="{{ route('grade-matrix.zero-based') }}" 
+                                   class="flex items-center px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-100 {{ $isZeroBasedActive ? 'bg-gray-100 text-teal-700 font-medium' : '' }}">
+                                    <i class="fas fa-table w-4 h-4 mr-2"></i>
+                                    Zero-based Matrix
+                                </a>
+                                <a href="{{ route('grade-matrix.nursing') }}" 
+                                   class="flex items-center px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-100 {{ $isNursingActive ? 'bg-gray-100 text-teal-700 font-medium' : '' }}">
+                                    <i class="fas fa-heartbeat w-4 h-4 mr-2"></i>
+                                    Nursing Matrix
+                                </a>
+                                <a href="{{ route('grade-matrix.general-education') }}" 
+                                   class="flex items-center px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-100 {{ $isGeneralEducationActive ? 'bg-gray-100 text-teal-700 font-medium' : '' }}">
+                                    <i class="fas fa-graduation-cap w-4 h-4 mr-2"></i>
+                                    General Education Matrix
+                                </a>
+                                <a href="{{ route('grade-matrix.customized') }}" 
+                                   class="flex items-center px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-100 {{ $isCustomizedActive ? 'bg-gray-100 text-teal-700 font-medium' : '' }}">
+                                    <i class="fas fa-cog w-4 h-4 mr-2"></i>
+                                    Customized Matrix
+                                </a>
+                            </div>
+                        </div>
                     </div>
                     
                     

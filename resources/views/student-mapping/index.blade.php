@@ -64,7 +64,7 @@
                         <div class="mb-4">
                             @php
                                 $totalStudents = $subject->studentMappings->count();
-                                $mappedStudents = $subject->studentMappings->whereNotNull('school_student_id')->count();
+                                $mappedStudents = $subject->studentMappings->whereNotNull('student_id')->count();
                                 $mappingPercentage = $totalStudents > 0 ? round(($mappedStudents / $totalStudents) * 100) : 0;
                             @endphp
                             

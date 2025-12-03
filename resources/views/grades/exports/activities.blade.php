@@ -135,18 +135,20 @@
         <table style="width: 100%; border: none;">
             <tr>
                 <td style="width: 50%; border: none; text-align: center; vertical-align: bottom;">
-                    <div style="margin-bottom: 40px;"></div>
-                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
-                        <strong>Submitted by Adviser</strong>
+                    <div style="margin-bottom: 5px; font-size: 13px;">
+                        <strong>{{ $adviserName ?? '' }}</strong>
                     </div>
-                    <div style="margin-top: 5px; font-size: 9px;">Signature over Printed Name</div>
+                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
+                        <span style="font-size: 9px;">Submitted by Adviser</span>
+                    </div>
                 </td>
                 <td style="width: 50%; border: none; text-align: center; vertical-align: bottom;">
-                    <div style="margin-bottom: 40px;"></div>
-                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
-                        <strong>Noted by Dean</strong>
+                    <div style="margin-bottom: 5px; font-size: 13px;">
+                        <strong>{{ $deanName ?? '' }}</strong>
                     </div>
-                    <div style="margin-top: 5px; font-size: 9px;">Signature over Printed Name</div>
+                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
+                        <span style="font-size: 9px;">Noted by Dean</span>
+                    </div>
                 </td>
             </tr>
         </table>

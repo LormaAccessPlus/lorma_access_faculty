@@ -185,16 +185,38 @@ class GoogleClassroomService
                 if ($response->getStudents()) {
                     foreach ($response->getStudents() as $student) {
                         $profile = $student->getProfile();
+                        
+                        // Get name information safely
+                        $name = $profile->getName();
+                        $fullName = $name ? $name->getFullName() : null;
+                        $givenName = $name ? $name->getGivenName() : null;
+                        $familyName = $name ? $name->getFamilyName() : null;
+                        
+                        // Get email safely
+                        $emailAddress = $profile->getEmailAddress();
+                        
+                        // Log if email is missing for debugging
+                        if (!$emailAddress) {
+                            Log::warning('Student without email address', [
+                                'user_id' => $student->getUserId(),
+                                'name' => $fullName,
+                                'course_id' => $courseId
+                            ]);
+                        }
+                        
                         $students[] = [
-                            'user_id' => $student->getUserId(),
-                            'course_id' => $student->getCourseId(),
+                            'userId' => $student->getUserId(),
+                            'courseId' => $student->getCourseId(),
+                            'emailAddress' => $emailAddress,
                             'profile' => [
                                 'id' => $profile->getId(),
-                                'name' => $profile->getName()->getFullName(),
-                                'given_name' => $profile->getName()->getGivenName(),
-                                'family_name' => $profile->getName()->getFamilyName(),
-                                'email_address' => $profile->getEmailAddress(),
-                                'photo_url' => $profile->getPhotoUrl()
+                                'name' => [
+                                    'fullName' => $fullName ?? 'Unknown',
+                                    'givenName' => $givenName,
+                                    'familyName' => $familyName,
+                                ],
+                                'emailAddress' => $emailAddress,
+                                'photoUrl' => $profile->getPhotoUrl()
                             ]
                         ];
                     }
@@ -321,6 +343,142 @@ class GoogleClassroomService
     public function getStudents(string $courseId): array
     {
         return $this->getCourseStudents($courseId);
+    }
+
+    /**
+     * Fetch quizzes (coursework with quiz-like names) for a specific course
+     * This filters coursework to identify quizzes based on naming patterns
+     */
+    public function getQuizzes(string $courseId): array
+    {
+        try {
+            $allCoursework = $this->getCourseWork($courseId);
+            $quizzes = [];
+            
+            // Filter coursework that looks like quizzes
+            foreach ($allCoursework as $work) {
+                $title = strtolower($work['title']);
+                
+                // Check if the title contains quiz-related keywords
+                if (str_contains($title, 'quiz') || 
+                    str_contains($title, 'test') || 
+                    str_contains($title, 'exam') ||
+                    preg_match('/\bq\d+\b/', $title)) { // Matches Q1, Q2, etc.
+                    
+                    $quizzes[] = [
+                        'id' => $work['id'],
+                        'course_id' => $work['course_id'],
+                        'title' => $work['title'],
+                        'description' => $work['description'],
+                        'max_points' => $work['max_points'],
+                        'due_date' => $work['due_date'],
+                        'due_time' => $work['due_time'],
+                        'creation_time' => $work['creation_time'],
+                        'state' => $work['state'],
+                        'alternate_link' => $work['alternate_link']
+                    ];
+                }
+            }
+            
+            return $quizzes;
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch quizzes', [
+                'course_id' => $courseId,
+                'error' => $e->getMessage()
+            ]);
+            throw new \Exception('Failed to fetch quizzes for course: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Fetch activities (coursework excluding quizzes) for a specific course
+     * This filters coursework to identify regular activities
+     */
+    public function getActivities(string $courseId): array
+    {
+        try {
+            $allCoursework = $this->getCourseWork($courseId);
+            $activities = [];
+            
+            // Filter coursework that doesn't look like quizzes
+            foreach ($allCoursework as $work) {
+                $title = strtolower($work['title']);
+                
+                // Exclude quiz-related keywords
+                if (!str_contains($title, 'quiz') && 
+                    !str_contains($title, 'test') && 
+                    !str_contains($title, 'exam') &&
+                    !preg_match('/\bq\d+\b/', $title)) {
+                    
+                    $activities[] = [
+                        'id' => $work['id'],
+                        'course_id' => $work['course_id'],
+                        'title' => $work['title'],
+                        'description' => $work['description'],
+                        'max_points' => $work['max_points'],
+                        'due_date' => $work['due_date'],
+                        'due_time' => $work['due_time'],
+                        'creation_time' => $work['creation_time'],
+                        'state' => $work['state'],
+                        'alternate_link' => $work['alternate_link']
+                    ];
+                }
+            }
+            
+            return $activities;
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch activities', [
+                'course_id' => $courseId,
+                'error' => $e->getMessage()
+            ]);
+            throw new \Exception('Failed to fetch activities for course: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Fetch quiz submissions for a specific quiz
+     * This is an alias for getStudentSubmissions but specifically for quizzes
+     */
+    public function getQuizSubmissions(string $courseId, string $quizId): array
+    {
+        return $this->getStudentSubmissions($courseId, $quizId);
+    }
+
+    /**
+     * Fetch coursework with categorization (activities vs quizzes)
+     * Returns an array with 'activities' and 'quizzes' keys
+     */
+    public function getCategorizedCourseWork(string $courseId): array
+    {
+        try {
+            $allCoursework = $this->getCourseWork($courseId);
+            $categorized = [
+                'activities' => [],
+                'quizzes' => []
+            ];
+            
+            foreach ($allCoursework as $work) {
+                $title = strtolower($work['title']);
+                
+                // Categorize based on title
+                if (str_contains($title, 'quiz') || 
+                    str_contains($title, 'test') || 
+                    str_contains($title, 'exam') ||
+                    preg_match('/\bq\d+\b/', $title)) {
+                    $categorized['quizzes'][] = $work;
+                } else {
+                    $categorized['activities'][] = $work;
+                }
+            }
+            
+            return $categorized;
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch categorized coursework', [
+                'course_id' => $courseId,
+                'error' => $e->getMessage()
+            ]);
+            throw new \Exception('Failed to fetch categorized coursework: ' . $e->getMessage());
+        }
     }
 
     /**

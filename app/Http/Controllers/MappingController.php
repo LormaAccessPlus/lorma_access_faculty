@@ -97,14 +97,14 @@ class MappingController extends Controller
             'gcr_student.userId' => 'required|string',
             'gcr_student.profile.name.fullName' => 'required|string',
             'gcr_student.emailAddress' => 'nullable|email',
-            'school_student_id' => 'nullable|integer|exists:school_students,id',
+            'student_id' => 'nullable|integer|exists:students,id',
         ]);
 
         try {
             $mapping = $this->mappingService->createManualMapping(
                 $subject,
                 $request->gcr_student,
-                $request->school_student_id
+                $request->student_id
             );
 
             return response()->json([
@@ -126,13 +126,13 @@ class MappingController extends Controller
     public function update(Request $request, Subject $subject, StudentMapping $mapping): JsonResponse
     {
         $request->validate([
-            'school_student_id' => 'nullable|integer|exists:school_students,id',
+            'student_id' => 'nullable|integer|exists:students,id',
         ]);
 
         try {
             $mapping->update([
-                'school_student_id' => $request->school_student_id,
-                'mapping_confidence' => $request->school_student_id ? 1.0 : 0.0,
+                'student_id' => $request->student_id,
+                'mapping_confidence' => $request->student_id ? 1.0 : 0.0,
             ]);
 
             return response()->json([
@@ -215,25 +215,32 @@ class MappingController extends Controller
     }
 
     /**
-     * Get available school students for mapping (AJAX endpoint)
+     * Get available students for mapping (AJAX endpoint)
      */
     public function getSchoolStudents(Subject $subject): JsonResponse
     {
         try {
-            // This would fetch from school database - mock for now
-            $schoolStudents = collect([
-                (object) ['id' => 1, 'full_name' => 'John Doe', 'email' => 'john.doe@student.lorma.edu'],
-                (object) ['id' => 2, 'full_name' => 'Jane Smith', 'email' => 'jane.smith@student.lorma.edu'],
-            ]);
+            // Get students enrolled in this subject
+            $students = $subject->students()
+                ->where('student_subject.status', 'enrolled')
+                ->get()
+                ->map(function ($student) {
+                    return [
+                        'id' => $student->id,
+                        'full_name' => $student->full_name,
+                        'email' => $student->email,
+                        'student_number' => $student->student_number,
+                    ];
+                });
 
             return response()->json([
                 'success' => true,
-                'students' => $schoolStudents
+                'students' => $students
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch school students: ' . $e->getMessage()
+                'message' => 'Failed to fetch students: ' . $e->getMessage()
             ], 500);
         }
     }

@@ -4,24 +4,24 @@ namespace App\Services;
 
 use App\Models\StudentMapping;
 use App\Models\Subject;
-use App\Models\SchoolStudent;
+use App\Models\Student;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class StudentMappingService
 {
     /**
-     * Automatically match GCR students to school database students
+     * Automatically match GCR students to database students
      */
     public function autoMatchStudents(Subject $subject, array $gcrStudents): array
     {
-        $schoolStudents = $this->getSchoolStudentsForSubject($subject);
+        $students = $this->getSchoolStudentsForSubject($subject);
         $matches = [];
         $conflicts = [];
         $unmatched = [];
 
         foreach ($gcrStudents as $gcrStudent) {
-            $match = $this->findBestMatch($gcrStudent, $schoolStudents);
+            $match = $this->findBestMatch($gcrStudent, $students);
             
             if ($match && $match['confidence'] >= 0.8) {
                 $matches[] = [
@@ -49,22 +49,22 @@ class StudentMappingService
     }
 
     /**
-     * Find the best match for a GCR student among school students
+     * Find the best match for a GCR student among database students
      */
-    protected function findBestMatch(array $gcrStudent, Collection $schoolStudents): ?array
+    protected function findBestMatch(array $gcrStudent, Collection $students): ?array
     {
         $bestMatch = null;
         $bestConfidence = 0;
 
-        foreach ($schoolStudents as $schoolStudent) {
-            $confidence = $this->calculateMatchConfidence($gcrStudent, $schoolStudent);
+        foreach ($students as $student) {
+            $confidence = $this->calculateMatchConfidence($gcrStudent, $student);
             
             if ($confidence > $bestConfidence) {
                 $bestConfidence = $confidence;
                 $bestMatch = [
-                    'student' => $schoolStudent,
+                    'student' => $student,
                     'confidence' => $confidence,
-                    'type' => $this->getMatchType($gcrStudent, $schoolStudent, $confidence)
+                    'type' => $this->getMatchType($gcrStudent, $student, $confidence)
                 ];
             }
         }
@@ -73,34 +73,53 @@ class StudentMappingService
     }
 
     /**
-     * Calculate match confidence between GCR and school student
+     * Calculate match confidence between GCR and database student
+     * Priority: Name matching is the primary validation criterion
      */
-    protected function calculateMatchConfidence(array $gcrStudent, $schoolStudent): float
+    protected function calculateMatchConfidence(array $gcrStudent, $student): float
     {
         $confidence = 0;
 
-        // Email matching (highest weight)
-        if (isset($gcrStudent['emailAddress']) && $schoolStudent->email) {
-            if (strtolower($gcrStudent['emailAddress']) === strtolower($schoolStudent->email)) {
-                $confidence += 0.6; // 60% weight for exact email match
+        // Name matching (PRIMARY validation - highest weight)
+        if (isset($gcrStudent['profile']['name']['fullName']) && $student->full_name) {
+            $nameSimilarity = $this->nameSimilarity(
+                $gcrStudent['profile']['name']['fullName'],
+                $student->full_name
+            );
+            
+            // If names match exactly or very closely, give high confidence
+            if ($nameSimilarity >= 0.95) {
+                return 1.0; // 95%+ name match = 100% confidence, automatic match
+            } elseif ($nameSimilarity >= 0.85) {
+                $confidence += 0.9; // 85-95% name match = 90% confidence
+            } elseif ($nameSimilarity >= 0.75) {
+                $confidence += 0.8; // 75-85% name match = 80% confidence
             } else {
-                $emailSimilarity = $this->emailSimilarity($gcrStudent['emailAddress'], $schoolStudent->email);
+                $confidence += $nameSimilarity * 0.7; // Below 75% = proportional confidence
+            }
+        }
+
+        // Google User ID matching (secondary - for already matched students)
+        if (isset($gcrStudent['userId']) && $student->google_user_id) {
+            if ($gcrStudent['userId'] === $student->google_user_id) {
+                return 1.0; // Exact Google User ID match = 100% confidence
+            }
+        }
+
+        // Email matching (tertiary - bonus if available)
+        if (isset($gcrStudent['emailAddress']) && $student->email) {
+            if (strtolower($gcrStudent['emailAddress']) === strtolower($student->email)) {
+                return 1.0; // Exact email match = 100% confidence
+            } else {
+                // Add small bonus for similar emails
+                $emailSimilarity = $this->emailSimilarity($gcrStudent['emailAddress'], $student->email);
                 if ($emailSimilarity > 0.8) {
-                    $confidence += 0.4; // 40% weight for similar email
+                    $confidence += 0.1; // 10% bonus for similar email
                 }
             }
         }
 
-        // Name matching
-        if (isset($gcrStudent['profile']['name']['fullName']) && $schoolStudent->full_name) {
-            $nameSimilarity = $this->nameSimilarity(
-                $gcrStudent['profile']['name']['fullName'],
-                $schoolStudent->full_name
-            );
-            $confidence += $nameSimilarity * 0.4; // 40% weight for name similarity
-        }
-
-        return $confidence;
+        return min($confidence, 1.0); // Cap at 100%
     }
 
     /**
@@ -188,16 +207,35 @@ class StudentMappingService
     /**
      * Determine the type of match based on confidence and matching factors
      */
-    protected function getMatchType(array $gcrStudent, $schoolStudent, float $confidence): string
+    protected function getMatchType(array $gcrStudent, $student, float $confidence): string
     {
-        if (isset($gcrStudent['emailAddress']) && $schoolStudent->email &&
-            strtolower($gcrStudent['emailAddress']) === strtolower($schoolStudent->email)) {
+        // Check for exact name match
+        if (isset($gcrStudent['profile']['name']['fullName']) && $student->full_name) {
+            $nameSimilarity = $this->nameSimilarity(
+                $gcrStudent['profile']['name']['fullName'],
+                $student->full_name
+            );
+            if ($nameSimilarity >= 0.95) {
+                return 'name_exact';
+            }
+        }
+        
+        // Check for Google User ID match
+        if (isset($gcrStudent['userId']) && $student->google_user_id &&
+            $gcrStudent['userId'] === $student->google_user_id) {
+            return 'google_id_exact';
+        }
+        
+        // Check for email match
+        if (isset($gcrStudent['emailAddress']) && $student->email &&
+            strtolower($gcrStudent['emailAddress']) === strtolower($student->email)) {
             return 'email_exact';
         }
         
-        if ($confidence > 0.9) {
+        // Confidence-based types
+        if ($confidence >= 0.9) {
             return 'high_confidence';
-        } elseif ($confidence > 0.7) {
+        } elseif ($confidence >= 0.8) {
             return 'medium_confidence';
         } else {
             return 'low_confidence';
@@ -205,13 +243,31 @@ class StudentMappingService
     }
 
     /**
-     * Get school students for a specific subject
+     * Get students enrolled in a specific subject
      */
     protected function getSchoolStudentsForSubject(Subject $subject): Collection
     {
-        // This would typically query the school database for students enrolled in the subject
-        // For now, returning a mock collection - this should be implemented based on actual school DB structure
-        return collect([]);
+        try {
+            // Get students enrolled in this subject through the student_subject pivot table
+            $students = Student::query()
+                ->join('student_subject', 'students.id', '=', 'student_subject.student_id')
+                ->where('student_subject.subject_id', $subject->id)
+                ->where('student_subject.status', 'enrolled')
+                ->select('students.*')
+                ->get();
+
+            // Add full_name attribute to each student for easier matching
+            return $students->map(function ($student) {
+                $student->full_name = $student->full_name;
+                return $student;
+            });
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch students for subject', [
+                'subject_id' => $subject->id,
+                'error' => $e->getMessage()
+            ]);
+            return collect([]);
+        }
     }
 
     /**
@@ -220,13 +276,30 @@ class StudentMappingService
     public function saveMatches(Subject $subject, array $matches): void
     {
         foreach ($matches as $match) {
+            // Get student ID - handle both object and array formats
+            $studentId = null;
+            if (isset($match['school_student'])) {
+                if (is_object($match['school_student'])) {
+                    $studentId = $match['school_student']->id ?? null;
+                } elseif (is_array($match['school_student'])) {
+                    $studentId = $match['school_student']['id'] ?? null;
+                }
+            }
+            
+            // Log for debugging
+            Log::info('Saving match', [
+                'gcr_name' => $match['gcr_student']['profile']['name']['fullName'] ?? 'Unknown',
+                'student_id' => $studentId,
+                'confidence' => $match['confidence']
+            ]);
+            
             StudentMapping::updateOrCreate(
                 [
                     'subject_id' => $subject->id,
                     'gcr_student_id' => $match['gcr_student']['userId'] ?? null,
                 ],
                 [
-                    'school_student_id' => $match['school_student']->id ?? null,
+                    'student_id' => $studentId,
                     'student_name' => $match['gcr_student']['profile']['name']['fullName'] ?? 'Unknown',
                     'student_email' => $match['gcr_student']['emailAddress'] ?? null,
                     'mapping_confidence' => $match['confidence'],
@@ -241,7 +314,7 @@ class StudentMappingService
     public function createManualMapping(
         Subject $subject,
         array $gcrStudent,
-        ?int $schoolStudentId = null
+        ?int $studentId = null
     ): StudentMapping {
         return StudentMapping::updateOrCreate(
             [
@@ -249,10 +322,10 @@ class StudentMappingService
                 'gcr_student_id' => $gcrStudent['userId'] ?? null,
             ],
             [
-                'school_student_id' => $schoolStudentId,
+                'student_id' => $studentId,
                 'student_name' => $gcrStudent['profile']['name']['fullName'] ?? 'Unknown',
                 'student_email' => $gcrStudent['emailAddress'] ?? null,
-                'mapping_confidence' => $schoolStudentId ? 1.0 : 0.0, // Manual mappings have full confidence
+                'mapping_confidence' => $studentId ? 1.0 : 0.0, // Manual mappings have full confidence
             ]
         );
     }
@@ -295,15 +368,15 @@ class StudentMappingService
             }
         }
 
-        // Find duplicate school student mappings
-        $schoolStudentCounts = $mappings->groupBy('school_student_id')
-            ->filter(fn($group) => $group->count() > 1 && $group->first()->school_student_id !== null);
+        // Find duplicate student mappings
+        $studentCounts = $mappings->groupBy('student_id')
+            ->filter(fn($group) => $group->count() > 1 && $group->first()->student_id !== null);
 
-        foreach ($schoolStudentCounts as $schoolStudentId => $duplicateMappings) {
+        foreach ($studentCounts as $studentId => $duplicateMappings) {
             $conflicts[] = [
                 'mappings' => $duplicateMappings,
-                'reason' => 'duplicate_school_student',
-                'school_student_id' => $schoolStudentId
+                'reason' => 'duplicate_student',
+                'student_id' => $studentId
             ];
         }
 

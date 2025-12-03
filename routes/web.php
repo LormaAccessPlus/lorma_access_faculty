@@ -222,6 +222,9 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/get-term-grade', [App\Http\Controllers\GradeController::class, 'getTermGrade'])->name('get-term-grade');
         Route::post('/subjects/{subject}/import-from-classroom', [App\Http\Controllers\GradeController::class, 'importFromClassroom'])->name('import-from-classroom');
         
+        // Debug route - remove in production
+        Route::get('/subjects/{subject}/activities/{activity}/debug', [App\Http\Controllers\DebugGradesController::class, 'debugActivity'])->name('debug-activity');
+        
         // Grading Configuration Routes
         Route::post('/subjects/{subject}/grading-config', [App\Http\Controllers\GradeController::class, 'saveGradingConfig'])->name('save-grading-config');
         Route::post('/subjects/{subject}/final-rating-config', [App\Http\Controllers\GradeController::class, 'saveFinalRatingConfig'])->name('save-final-rating-config');
@@ -232,9 +235,145 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/subjects/{subject}/export/term/{term}', [App\Http\Controllers\GradeController::class, 'exportTerm'])->name('export.term');
     });
     
-    // Grading System Page
-    Route::get('/grading-system', [GradingSystemController::class, 'index'])->name('grading-system.index');
-    
     // Student Mapping Page
     Route::get('/student-mapping', [StudentMappingPageController::class, 'index'])->name('student-mapping.index');
+    
+    // Grade Matrix Routes
+    Route::prefix('grade-matrix')->name('grade-matrix.')->group(function () {
+        Route::get('/zero-based', [App\Http\Controllers\GradeMatrixController::class, 'zeroBased'])->name('zero-based');
+        Route::get('/nursing', [App\Http\Controllers\GradeMatrixController::class, 'nursing'])->name('nursing');
+        Route::get('/general-education', [App\Http\Controllers\GradeMatrixController::class, 'generalEducation'])->name('general-education');
+        Route::get('/customized', [App\Http\Controllers\GradeMatrixController::class, 'customized'])->name('customized');
+        
+        // Term grades for each matrix type
+        Route::get('/zero-based/subjects/{subject}/term/{term?}', [App\Http\Controllers\GradeMatrixController::class, 'zeroBasedTermGrades'])->name('zero-based.term');
+        Route::get('/nursing/subjects/{subject}/term/{term?}', [App\Http\Controllers\GradeMatrixController::class, 'nursingTermGrades'])->name('nursing.term');
+        Route::get('/general-education/subjects/{subject}/term/{term?}', [App\Http\Controllers\GradeMatrixController::class, 'generalEducationTermGrades'])->name('general-education.term');
+        Route::get('/customized/subjects/{subject}/term/{term?}', [App\Http\Controllers\GradeMatrixController::class, 'customizedTermGrades'])->name('customized.term');
+        
+        // Full matrix for each type
+        Route::get('/zero-based/subjects/{subject}/matrix', [App\Http\Controllers\GradeMatrixController::class, 'zeroBasedMatrix'])->name('zero-based.matrix');
+        Route::get('/nursing/subjects/{subject}/matrix', [App\Http\Controllers\GradeMatrixController::class, 'nursingMatrix'])->name('nursing.matrix');
+        Route::get('/general-education/subjects/{subject}/matrix', [App\Http\Controllers\GradeMatrixController::class, 'generalEducationMatrix'])->name('general-education.matrix');
+        Route::get('/customized/subjects/{subject}/matrix', [App\Http\Controllers\GradeMatrixController::class, 'customizedMatrix'])->name('customized.matrix');
+    });
+    
+    // Formula Configuration Routes (for Customized Matrix)
+    Route::prefix('formula')->name('formula.')->group(function () {
+        Route::get('/subjects/{subject}/term/{term}/config', [App\Http\Controllers\FormulaConfigController::class, 'show'])->name('config');
+        Route::post('/subjects/{subject}/term/{term}/save', [App\Http\Controllers\FormulaConfigController::class, 'save'])->name('save');
+        Route::post('/test', [App\Http\Controllers\FormulaConfigController::class, 'test'])->name('test');
+    });
+    
+    // Nursing-specific routes
+    Route::prefix('nursing')->name('nursing.')->group(function () {
+        Route::get('/subjects/{subject}/comprehensive-exam', [App\Http\Controllers\ComprehensiveExamController::class, 'index'])->name('comprehensive-exam.index');
+        Route::post('/subjects/{subject}/comprehensive-exam', [App\Http\Controllers\ComprehensiveExamController::class, 'store'])->name('comprehensive-exam.store');
+        Route::put('/subjects/{subject}/comprehensive-exam/{studentMappingId}', [App\Http\Controllers\ComprehensiveExamController::class, 'update'])->name('comprehensive-exam.update');
+        Route::delete('/subjects/{subject}/comprehensive-exam/{studentMappingId}', [App\Http\Controllers\ComprehensiveExamController::class, 'destroy'])->name('comprehensive-exam.destroy');
+        Route::post('/subjects/{subject}/comprehensive-exam/import', [App\Http\Controllers\ComprehensiveExamController::class, 'import'])->name('comprehensive-exam.import');
+        
+        // Recalculate all nursing term grades for a subject
+        Route::get('/subjects/{subject}/recalculate-grades', function(\App\Models\Subject $subject) {
+            $gradeController = app(\App\Http\Controllers\GradeController::class);
+            $reflection = new \ReflectionClass($gradeController);
+            $recalculateMethod = $reflection->getMethod('recalculateClassStanding');
+            $recalculateMethod->setAccessible(true);
+            
+            $terms = ['prelim', 'midterm', 'finals'];
+            $recalculatedCount = 0;
+            
+            foreach ($terms as $term) {
+                foreach ($subject->studentMappings as $studentMapping) {
+                    $recalculateMethod->invoke($gradeController, $studentMapping, $term, 'nursing');
+                    $recalculatedCount++;
+                }
+            }
+            
+            return redirect()->route('grade-matrix.nursing.matrix', $subject)
+                ->with('success', "Successfully recalculated {$recalculatedCount} term grades using the nursing formula.");
+        })->name('recalculate-grades');
+    });
+    
+    Route::prefix('grade-matrix')->name('grade-matrix.')->group(function () {
+        // Reset Zero-Based Formula to correct defaults
+        Route::get('/zero-based/subjects/{subject}/reset-formula', function(\App\Models\Subject $subject) {
+            $terms = ['prelim', 'midterm', 'finals'];
+            
+            foreach ($terms as $term) {
+                \App\Models\GradingConfig::updateOrCreate(
+                    [
+                        'subject_id' => $subject->id,
+                        'term' => $term,
+                        'matrix_type' => 'zero-based'
+                    ],
+                    [
+                        'class_standing_weight' => 40.00,
+                        'exam_weight' => 60.00,
+                        'formula_config' => [
+                            'type' => 'percentage',
+                            'components' => []
+                        ]
+                    ]
+                );
+            }
+            
+            return redirect()->route('grade-matrix.zero-based.term', ['subject' => $subject->id, 'term' => 'prelim'])
+                ->with('success', 'Zero-Based formula reset to 40% CS + 60% Exam for all terms!');
+        })->name('zero-based.reset-formula');
+        
+        // Fix General Education Formula (Web-based alternative to artisan command)
+        Route::get('/general-education/subjects/{subject}/fix-formula', function(\App\Models\Subject $subject) {
+            $terms = ['prelim', 'midterm', 'finals'];
+            $updated = [];
+            
+            foreach ($terms as $term) {
+                // Update or create grading config with matrix_type
+                $gradingConfig = \App\Models\GradingConfig::updateOrCreate(
+                    [
+                        'subject_id' => $subject->id,
+                        'term' => $term,
+                        'matrix_type' => 'general-education'
+                    ],
+                    [
+                        'class_standing_weight' => 66.67,
+                        'exam_weight' => 33.33,
+                        'formula_config' => [
+                            'type' => 'transmuted',
+                            'components' => []
+                        ]
+                    ]
+                );
+                $updated[] = $term;
+            }
+            
+            // Now recalculate all grades with matrix_type
+            $gradeController = app(\App\Http\Controllers\GradeController::class);
+            foreach ($terms as $term) {
+                $studentMappings = \App\Models\StudentMapping::where('subject_id', $subject->id)->get();
+                foreach ($studentMappings as $studentMapping) {
+                    // Use reflection to call private method with matrix_type
+                    $reflection = new \ReflectionClass($gradeController);
+                    $method = $reflection->getMethod('recalculateClassStanding');
+                    $method->setAccessible(true);
+                    $method->invoke($gradeController, $studentMapping, $term, 'general-education');
+                    
+                    // Recalculate term grade with matrix_type
+                    $termGrade = \App\Models\TermGrade::where('student_mapping_id', $studentMapping->id)
+                        ->where('subject_id', $subject->id)
+                        ->where('term', $term)
+                        ->first();
+                    
+                    if ($termGrade) {
+                        $calculateMethod = $reflection->getMethod('calculateTermGrade');
+                        $calculateMethod->setAccessible(true);
+                        $calculateMethod->invoke($gradeController, $termGrade, 'general-education');
+                    }
+                }
+            }
+            
+            return redirect()->route('grade-matrix.general-education.term', ['subject' => $subject->id, 'term' => 'prelim'])
+                ->with('success', 'General Education formula applied and grades recalculated for all terms!');
+        })->name('general-education.fix-formula');
+    });
 });

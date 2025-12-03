@@ -29,7 +29,16 @@ class ClassroomSyncController extends Controller
     public function index(Request $request): View
     {
         $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
-        $subjects = Subject::where('faculty_id', $faculty->id)->get();
+        
+        // Get current academic year and semester
+        $currentAcademicYear = config('app.current_academic_year', '2024-2025');
+        $currentSemester = config('app.current_semester', '1');
+        
+        // Only get subjects from the current semester
+        $subjects = Subject::where('faculty_id', $faculty->id)
+            ->where('academic_year', $currentAcademicYear)
+            ->where('semester', $currentSemester)
+            ->get();
         
         // Get subjects that are already connected to GCR
         $connectedSubjects = $subjects->whereNotNull('gcr_class_id');
@@ -57,9 +66,23 @@ class ClassroomSyncController extends Controller
             
             $courses = $this->classroomService->getCourses();
             
+            // Get all GCR class IDs that are already mapped to subjects
+            $mappedGcrClassIds = Subject::where('faculty_id', $faculty->id)
+                ->whereNotNull('gcr_class_id')
+                ->pluck('gcr_class_id')
+                ->toArray();
+            
+            // Filter out courses that are already mapped
+            $availableCourses = array_filter($courses, function($course) use ($mappedGcrClassIds) {
+                return !in_array($course['id'], $mappedGcrClassIds);
+            });
+            
+            // Re-index the array to ensure proper JSON encoding
+            $availableCourses = array_values($availableCourses);
+            
             return response()->json([
                 'success' => true,
-                'courses' => $courses
+                'courses' => $availableCourses
             ]);
             
         } catch (\Exception $e) {
@@ -549,7 +572,12 @@ class ClassroomSyncController extends Controller
             $importedCount = 0;
             $errors = [];
 
-            DB::transaction(function () use ($subject, $request, $courseworkById, &$importedCount, &$errors) {
+            $gradesImportedCount = 0;
+            
+            DB::transaction(function () use ($subject, $request, $courseworkById, &$importedCount, &$errors, $faculty, &$gradesImportedCount) {
+                // Get student mappings for this subject
+                $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
+                
                 foreach ($request->coursework_ids as $courseworkId) {
                     try {
                         $assignment = $courseworkById->get($courseworkId);
@@ -564,19 +592,90 @@ class ClassroomSyncController extends Controller
                             ->where('gcr_assignment_id', $assignment['id'])
                             ->first();
 
+                        $activity = null;
                         if (!$existingActivity) {
+                            // Automatically categorize as quiz or activity based on title
+                            $title = strtolower($assignment['title']);
+                            $activityCategory = 'activity';
+                            
+                            if (str_contains($title, 'quiz') || 
+                                str_contains($title, 'test') || 
+                                str_contains($title, 'exam') ||
+                                preg_match('/\bq\d+\b/', $title)) {
+                                $activityCategory = 'quiz';
+                            }
+                            
                             // Create new activity
-                            $subject->activities()->create([
+                            $activity = $subject->activities()->create([
                                 'name' => $assignment['title'],
                                 'type' => $request->default_type,
                                 'term' => $request->default_term,
                                 'max_score' => $assignment['max_points'] ?? 100,
                                 'weight' => null,
+                                'activity_category' => $activityCategory,
                                 'gcr_assignment_id' => $assignment['id']
                             ]);
                             $importedCount++;
                         } else {
+                            $activity = $existingActivity;
                             $errors[] = "Activity '{$assignment['title']}' already exists";
+                        }
+
+                        // Import grades for this activity
+                        if ($activity && $studentMappings->isNotEmpty()) {
+                            try {
+                                $submissions = $this->classroomService->getStudentSubmissions(
+                                    $subject->gcr_class_id,
+                                    $assignment['id']
+                                );
+
+                                $studentsWithGrades = [];
+                                foreach ($submissions as $submission) {
+                                    $studentMapping = $studentMappings->firstWhere('gcr_student_id', $submission['user_id']);
+                                    
+                                    if (!$studentMapping) {
+                                        continue;
+                                    }
+
+                                    $score = $submission['assigned_grade'] ?? $submission['draft_grade'] ?? null;
+                                    
+                                    if ($score !== null) {
+                                        \App\Models\GradeRecord::updateOrCreate(
+                                            [
+                                                'student_mapping_id' => $studentMapping->id,
+                                                'activity_id' => $activity->id,
+                                            ],
+                                            [
+                                                'score' => $score,
+                                                'max_score' => $activity->max_score,
+                                                'term' => $activity->term,
+                                                'created_by' => $faculty->id,
+                                            ]
+                                        );
+                                        $gradesImportedCount++;
+                                        
+                                        // Track students who got grades for class standing recalculation
+                                        if (!in_array($studentMapping->id, $studentsWithGrades)) {
+                                            $studentsWithGrades[] = $studentMapping->id;
+                                        }
+                                    }
+                                }
+                                
+                                // Recalculate class standing for all students who got grades
+                                foreach ($studentsWithGrades as $studentMappingId) {
+                                    $studentMapping = $studentMappings->firstWhere('id', $studentMappingId);
+                                    if ($studentMapping) {
+                                        $this->recalculateClassStanding($studentMapping, $activity->term);
+                                    }
+                                }
+                            } catch (\Exception $e) {
+                                Log::warning('Failed to import grades for activity', [
+                                    'activity_id' => $activity->id,
+                                    'activity_name' => $activity->name,
+                                    'error' => $e->getMessage()
+                                ]);
+                                // Don't add to errors array - grades import is optional
+                            }
                         }
                     } catch (\Exception $e) {
                         $errors[] = "Failed to import '" . ($assignment['title'] ?? 'Unknown') . "': " . $e->getMessage();
@@ -584,10 +683,16 @@ class ClassroomSyncController extends Controller
                 }
             });
 
+            $message = "Successfully imported {$importedCount} activities from Google Classroom.";
+            if ($gradesImportedCount > 0) {
+                $message .= " Also imported {$gradesImportedCount} grade(s).";
+            }
+            
             return response()->json([
                 'success' => true,
-                'message' => "Successfully imported {$importedCount} activities from Google Classroom.",
+                'message' => $message,
                 'imported_count' => $importedCount,
+                'grades_imported_count' => $gradesImportedCount,
                 'errors' => $errors
             ]);
 
@@ -602,5 +707,55 @@ class ClassroomSyncController extends Controller
                 'message' => 'Failed to import activities: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Recalculate class standing for a student in a specific term
+     */
+    private function recalculateClassStanding(StudentMapping $studentMapping, string $term): void
+    {
+        // Get all grade records for this student in this term
+        $gradeRecords = \App\Models\GradeRecord::whereHas('activity', function ($query) use ($studentMapping, $term) {
+            $query->where('subject_id', $studentMapping->subject_id)
+                  ->where('term', $term);
+        })->where('student_mapping_id', $studentMapping->id)->get();
+
+        if ($gradeRecords->isEmpty()) {
+            return;
+        }
+
+        // Calculate total score and total possible score
+        $totalScore = $gradeRecords->sum('score');
+        $totalPossible = $gradeRecords->sum('max_score');
+
+        if ($totalPossible == 0) {
+            return;
+        }
+
+        // Get grading configuration to get the activity weight
+        $gradingConfig = \App\Models\GradingConfig::where('subject_id', $studentMapping->subject_id)
+            ->where('term', $term)
+            ->first();
+        
+        // Get activity weight (default to 40% if not configured)
+        $activityWeight = $gradingConfig ? $gradingConfig->class_standing_weight : 40;
+        
+        // Calculate class standing percentage
+        $classStandingPercentage = ($totalScore / $totalPossible) * 100;
+
+        // Apply the activity weight to get the class standing
+        $classStanding = $classStandingPercentage * ($activityWeight / 100);
+
+        // Update or create term grade record
+        \App\Models\TermGrade::updateOrCreate(
+            [
+                'student_mapping_id' => $studentMapping->id,
+                'subject_id' => $studentMapping->subject_id,
+                'term' => $term,
+            ],
+            [
+                'class_standing' => round($classStanding, 2),
+            ]
+        );
     }
 }

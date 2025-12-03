@@ -11,48 +11,7 @@
     </div>
 
     <div x-data="{
-        expanded: false,
-        prelimWeight: {{ $finalRatingConfig['prelim_weight'] ?? 30 }},
-        midtermWeight: {{ $finalRatingConfig['midterm_weight'] ?? 30 }},
-        finalsWeight: {{ $finalRatingConfig['finals_weight'] ?? 40 }},
-        get totalWeight() {
-            return parseFloat(this.prelimWeight) + parseFloat(this.midtermWeight) + parseFloat(this.finalsWeight);
-        },
-        saveFinalRatingWeights() {
-            const weights = {
-                prelim_weight: parseFloat(this.prelimWeight),
-                midterm_weight: parseFloat(this.midtermWeight),
-                finals_weight: parseFloat(this.finalsWeight)
-            };
-            
-            if (weights.prelim_weight + weights.midterm_weight + weights.finals_weight !== 100) {
-                alert('Weights must total 100%');
-                return;
-            }
-            
-            fetch('{{ route('grades.save-final-rating-config', $subject) }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').getAttribute('content'),
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(weights)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Final rating weights saved successfully! Grades will be recalculated.');
-                    window.location.reload();
-                } else {
-                    alert('Error: ' + (data.message || 'Failed to save weights'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Failed to save weights');
-            });
-        }
+        expanded: false
     }">
         <!-- Formula Summary Card -->
         <button @click="expanded = !expanded" 
@@ -60,12 +19,9 @@
             <div class="flex items-center space-x-6">
                 <i class="fas fa-formula text-3xl text-blue-600"></i>
                 <div class="text-left">
-                    <div class="text-sm text-gray-600 font-medium">Current Formula</div>
+                    <div class="text-sm text-gray-600 font-medium">{{ ucfirst($term) }} Term Formula</div>
                     <div class="text-lg font-semibold text-gray-900">
-                        {{ $gradingConfig->class_standing_weight ?? 40 }}% CS + {{ $gradingConfig->exam_weight ?? 60 }}% Exam per term | 
-                        <span class="text-blue-600" x-text="prelimWeight + '%'"></span> Prelims + 
-                        <span class="text-green-600" x-text="midtermWeight + '%'"></span> Midterm + 
-                        <span class="text-purple-600" x-text="finalsWeight + '%'"></span> Finals
+                        {{ $gradingConfig->class_standing_weight ?? 40 }}% Activities + {{ $gradingConfig->exam_weight ?? 60 }}% Exam
                     </div>
                 </div>
             </div>
@@ -193,79 +149,7 @@
                 </p>
             </div>
 
-            <!-- Final Rating Weights (Editable) -->
-            <div class="p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border-2 border-orange-300">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
-                    <i class="fas fa-sliders-h mr-2 text-orange-600"></i>
-                    Final Rating Weights (Editable)
-                </h4>
-                <form @submit.prevent="saveFinalRatingWeights()" class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-play mr-1 text-blue-600"></i>
-                                Prelims Weight (%)
-                            </label>
-                            <input type="number" x-model="prelimWeight" min="0" max="100" step="0.01"
-                                   class="w-full px-3 py-2 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 text-center text-lg font-semibold">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-pause mr-1 text-green-600"></i>
-                                Midterm Weight (%)
-                            </label>
-                            <input type="number" x-model="midtermWeight" min="0" max="100" step="0.01"
-                                   class="w-full px-3 py-2 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 text-center text-lg font-semibold">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-stop mr-1 text-purple-600"></i>
-                                Finals Weight (%)
-                            </label>
-                            <input type="number" x-model="finalsWeight" min="0" max="100" step="0.01"
-                                   class="w-full px-3 py-2 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 text-center text-lg font-semibold">
-                        </div>
-                        <div class="flex items-end">
-                            <div class="w-full text-center p-3 rounded-lg" :class="totalWeight === 100 ? 'bg-green-100 border-2 border-green-500' : 'bg-red-100 border-2 border-red-500'">
-                                <div class="text-xs text-gray-600 mb-1">Total</div>
-                                <div class="text-2xl font-bold" :class="totalWeight === 100 ? 'text-green-700' : 'text-red-700'" x-text="totalWeight + '%'"></div>
-                                <div class="text-xs mt-1" :class="totalWeight === 100 ? 'text-green-600' : 'text-red-600'">
-                                    <i :class="totalWeight === 100 ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="bg-white rounded-lg p-4 border border-orange-200">
-                        <div class="text-center mb-3">
-                            <div class="text-sm text-gray-600 mb-1">Final Rating Formula</div>
-                            <div class="text-lg font-bold text-orange-700">
-                                FR = (Prelims × <span x-text="prelimWeight"></span>%) + (Midterm × <span x-text="midtermWeight"></span>%) + (Finals × <span x-text="finalsWeight"></span>%)
-                            </div>
-                        </div>
-                        <div class="text-xs text-gray-600 text-center">
-                            <i class="fas fa-lightbulb text-yellow-500 mr-1"></i>
-                            Example: If Prelims=85, Midterm=90, Finals=88 → FR = (85×<span x-text="prelimWeight"></span>% + 90×<span x-text="midtermWeight"></span>% + 88×<span x-text="finalsWeight"></span>%)
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center justify-between pt-4 border-t border-orange-200">
-                        <p class="text-xs text-gray-600" x-show="totalWeight !== 100">
-                            <i class="fas fa-exclamation-triangle text-red-600 mr-1"></i>
-                            <span class="text-red-600 font-semibold">Warning:</span> Weights must total 100% for accurate calculation
-                        </p>
-                        <button type="submit" 
-                                :disabled="totalWeight !== 100"
-                                :class="totalWeight === 100 ? 'opacity-100 cursor-pointer' : 'opacity-50 cursor-not-allowed'"
-                                class="px-6 py-2 text-white rounded-lg font-medium transition-colors"
-                                style="background-color: #E67E22;"
-                                onmouseover="if(this.disabled === false) this.style.backgroundColor='#D35400';"
-                                onmouseout="this.style.backgroundColor='#E67E22';">
-                            <i class="fas fa-save mr-2"></i>Save Final Rating Weights
-                        </button>
-                    </div>
-                </form>
-            </div>
+
 
             <!-- Important Note -->
             <div class="mt-6 p-4 bg-yellow-50 rounded-lg border-2 border-yellow-300">

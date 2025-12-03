@@ -12,26 +12,27 @@ class StudentMapping extends Model
     use HasFactory;
     protected $fillable = [
         'subject_id',
-        'school_student_id',
+        'student_id',
         'gcr_student_id',
         'student_name',
-        'school_student_name',
-        'gcr_student_email',
+        'student_email',
         'mapping_confidence',
-        'mapping_status',
-        'mapped_by',
-        'mapped_at'
     ];
 
     protected $casts = [
         'subject_id' => 'integer',
-        'school_student_id' => 'integer',
+        'student_id' => 'integer',
         'mapping_confidence' => 'decimal:2',
     ];
 
     public function subject(): BelongsTo
     {
         return $this->belongsTo(Subject::class);
+    }
+
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class);
     }
 
     public function gradeRecords(): HasMany

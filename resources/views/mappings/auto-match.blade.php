@@ -56,7 +56,7 @@
                                             {{ $match['gcr_student']['profile']['name']['fullName'] ?? 'Unknown' }}
                                         </div>
                                         <div class="text-sm text-gray-500">
-                                            {{ $match['gcr_student']['emailAddress'] ?? 'No email' }}
+                                            GCR ID: {{ substr($match['gcr_student']['userId'] ?? 'N/A', -8) }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -64,7 +64,7 @@
                                             {{ $match['school_student']->full_name ?? 'Unknown' }}
                                         </div>
                                         <div class="text-sm text-gray-500">
-                                            {{ $match['school_student']->email ?? 'No email' }}
+                                            ID: {{ $match['school_student']->student_number ?? 'No ID' }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -133,7 +133,7 @@
                                             {{ $conflict['gcr_student']['profile']['name']['fullName'] ?? 'Unknown' }}
                                         </div>
                                         <div class="text-sm text-gray-500">
-                                            {{ $conflict['gcr_student']['emailAddress'] ?? 'No email' }}
+                                            GCR ID: {{ substr($conflict['gcr_student']['userId'] ?? 'N/A', -8) }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -142,7 +142,7 @@
                                                 {{ $conflict['possible_matches'][0]['student']->full_name ?? 'Unknown' }}
                                             </div>
                                             <div class="text-sm text-gray-500">
-                                                {{ $conflict['possible_matches'][0]['student']->email ?? 'No email' }}
+                                                ID: {{ $conflict['possible_matches'][0]['student']->student_number ?? 'No ID' }}
                                             </div>
                                         @else
                                             <span class="text-sm text-gray-500">No matches found</span>
@@ -194,7 +194,7 @@
                                             {{ $student['profile']['name']['fullName'] ?? 'Unknown' }}
                                         </div>
                                         <div class="text-sm text-gray-500">
-                                            {{ $student['emailAddress'] ?? 'No email' }}
+                                            GCR ID: {{ substr($student['userId'] ?? 'N/A', -8) }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">

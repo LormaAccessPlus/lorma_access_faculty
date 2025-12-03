@@ -27,14 +27,22 @@ class ActivityController extends Controller
         $type = $request->get('type');
         $term = $request->get('term');
 
-        // Get faculty's subjects for the filter dropdown
+        // Get current academic year and semester
+        $currentAcademicYear = config('app.current_academic_year', '2024-2025');
+        $currentSemester = config('app.current_semester', '1');
+
+        // Get faculty's subjects for the filter dropdown (current semester only)
         $subjects = Subject::where('faculty_id', $faculty->id)
+            ->where('academic_year', $currentAcademicYear)
+            ->where('semester', $currentSemester)
             ->orderBy('subject_code')
             ->get();
 
         $query = Activity::with('subject')
-            ->whereHas('subject', function($q) use ($faculty) {
-                $q->where('faculty_id', $faculty->id);
+            ->whereHas('subject', function($q) use ($faculty, $currentAcademicYear, $currentSemester) {
+                $q->where('faculty_id', $faculty->id)
+                    ->where('academic_year', $currentAcademicYear)
+                    ->where('semester', $currentSemester);
             })
             ->when($subjectId, fn($q) => $q->where('subject_id', $subjectId))
             ->when($type, fn($q) => $q->where('type', $type))
@@ -96,8 +104,14 @@ class ActivityController extends Controller
             'term' => ['required', Rule::in(['prelim', 'midterm', 'finals'])],
             'max_score' => 'required|numeric|min:0|max:999999.99',
             'weight' => 'nullable|numeric|min:0|max:100',
+            'activity_category' => ['nullable', Rule::in(['activity', 'quiz'])],
             'gcr_assignment_id' => 'nullable|string|max:255'
         ]);
+        
+        // Set default activity_category if not provided
+        if (!isset($validated['activity_category'])) {
+            $validated['activity_category'] = 'activity';
+        }
 
         // Verify subject belongs to authenticated faculty
         $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();

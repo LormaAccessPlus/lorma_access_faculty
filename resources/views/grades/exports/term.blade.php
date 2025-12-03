@@ -91,7 +91,6 @@
                 <th style="width: 50px;">No.</th>
                 <th style="width: 250px;">Student Name</th>
                 <th>Term Grade</th>
-                <th>Remarks</th>
             </tr>
         </thead>
         <tbody>
@@ -99,22 +98,18 @@
                 @php
                     $termGrade = $termGrades->where('student_mapping_id', $mapping->id)->first();
                     $grade = $termGrade ? $termGrade->term_grade : null;
-                    $remarks = $grade ? ($grade >= 75 ? 'PASSED' : 'FAILED') : 'NO GRADE';
                 @endphp
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td class="student-name">{{ $mapping->student_name }}</td>
                     <td class="grade-cell">{{ $grade ? number_format($grade, 2) : '-' }}</td>
-                    <td style="color: {{ $grade && $grade >= 75 ? '#10b981' : '#ef4444' }};">
-                        {{ $remarks }}
-                    </td>
                 </tr>
             @endforeach
         </tbody>
         <tfoot>
             <tr>
                 <th colspan="2">Total Students</th>
-                <th colspan="2">{{ $subject->studentMappings->count() }}</th>
+                <th>{{ $subject->studentMappings->count() }}</th>
             </tr>
         </tfoot>
     </table>
@@ -124,18 +119,20 @@
         <table style="width: 100%; border: none;">
             <tr>
                 <td style="width: 50%; border: none; text-align: center; vertical-align: bottom;">
-                    <div style="margin-bottom: 40px;"></div>
-                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
-                        <strong>Submitted by Adviser</strong>
+                    <div style="margin-bottom: 5px; font-size: 13px;">
+                        <strong>{{ $adviserName ?? '' }}</strong>
                     </div>
-                    <div style="margin-top: 5px; font-size: 10px;">Signature over Printed Name</div>
+                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
+                        <span style="font-size: 10px;">Submitted by Adviser</span>
+                    </div>
                 </td>
                 <td style="width: 50%; border: none; text-align: center; vertical-align: bottom;">
-                    <div style="margin-bottom: 40px;"></div>
-                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
-                        <strong>Noted by Dean</strong>
+                    <div style="margin-bottom: 5px; font-size: 13px;">
+                        <strong>{{ $deanName ?? '' }}</strong>
                     </div>
-                    <div style="margin-top: 5px; font-size: 10px;">Signature over Printed Name</div>
+                    <div style="border-top: 1px solid #000; display: inline-block; width: 200px; padding-top: 5px;">
+                        <span style="font-size: 10px;">Noted by Dean</span>
+                    </div>
                 </td>
             </tr>
         </table>
@@ -143,7 +140,6 @@
 
     <div class="footer">
         <p>Lorma Colleges - Faculty Grading System</p>
-        <p>Passing Grade: 75.00 | Term Weight: {{ ucfirst($term) }} - {{ $term == 'prelim' ? '30%' : ($term == 'midterm' ? '30%' : '40%') }}</p>
         <p>Generated: {{ now()->format('F d, Y h:i A') }}</p>
     </div>
 </body>

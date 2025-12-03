@@ -12,24 +12,51 @@
                 <p class="text-gray-600">{{ $subject->subject_code }} - {{ $subject->subject_name }} ({{ $subject->section }})</p>
             </div>
             <div class="flex space-x-3">
-                <a href="{{ route('grades.matrix', $subject) }}" class="text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                @php
+                    $from = request()->query('from');
+                    if (!$from) {
+                        $from = request()->input('from');
+                    }
+                    $backRoute = match($from) {
+                        'zero-based' => route('grade-matrix.zero-based'),
+                        'nursing' => route('grade-matrix.nursing'),
+                        'general-education' => route('grade-matrix.general-education'),
+                        'customized' => route('grade-matrix.customized'),
+                        default => route('dashboard')
+                    };
+                    $backLabel = match($from) {
+                        'zero-based' => 'Back to Zero-based Matrix',
+                        'nursing' => 'Back to Nursing Matrix',
+                        'general-education' => 'Back to General Education Matrix',
+                        'customized' => 'Back to Customized Matrix',
+                        default => 'Back to Dashboard'
+                    };
+                @endphp
+                <!-- Debug: From = {{ $from ?? 'null' }} -->
+                <a href="{{ route('grades.matrix', ['subject' => $subject, 'from' => $from]) }}" class="text-white px-4 py-2 rounded-lg font-medium transition-colors"
                    style="background-color: #08695A;"
                    onmouseover="this.style.backgroundColor='#065A4A';"
                    onmouseout="this.style.backgroundColor='#08695A';">
                     <i class="fas fa-table mr-2"></i>Full Matrix
                 </a>
-                <a href="{{ route('subjects.show', $subject) }}" class="px-4 py-2 rounded-lg font-medium transition-colors border"
+                <a href="{{ $backRoute }}" class="px-4 py-2 rounded-lg font-medium transition-colors border"
                    style="border-color: #08695A; color: #08695A; background-color: white;"
                    onmouseover="this.style.backgroundColor='#08695A'; this.style.color='white';"
                    onmouseout="this.style.backgroundColor='white'; this.style.color='#08695A';">
-                    <i class="fas fa-arrow-left mr-2"></i>Back to Subject
+                    <i class="fas fa-arrow-left mr-2"></i>{{ $backLabel }}
                 </a>
             </div>
         </div>
     </div>
 
     <!-- Term Navigation Tabs -->
-    <div class="bg-white rounded-lg shadow-sm border mb-6">
+    <div class="bg-white rounded-lg shadow-sm border mb-6" x-data="{ 
+        termProgress: {
+            prelim: {{ $termProgress['prelim']['percentage'] ?? 0 }},
+            midterm: {{ $termProgress['midterm']['percentage'] ?? 0 }},
+            finals: {{ $termProgress['finals']['percentage'] ?? 0 }}
+        }
+    }">
         <div class="border-b border-gray-200">
             <nav class="flex space-x-8 px-6" aria-label="Tabs">
                 @foreach(['prelim', 'midterm', 'finals'] as $termKey)
@@ -37,11 +64,10 @@
                        class="py-4 px-4 border-b-2 font-medium text-sm transition-colors {{ $term === $termKey ? 'text-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}"
                        style="{{ $term === $termKey ? 'border-color: #08695A; background-color: #08695A; border-radius: 8px 8px 0 0; margin-bottom: -1px;' : '' }}">
                         <span class="capitalize">{{ $termKey }}</span>
-                        @if(isset($termProgress[$termKey]))
-                            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $termProgress[$termKey]['percentage'] == 100 ? 'bg-green-100 text-green-800' : ($termProgress[$termKey]['percentage'] > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800') }}">
-                                {{ $termProgress[$termKey]['percentage'] ?? 0 }}%
-                            </span>
-                        @endif
+                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                              :class="termProgress.{{ $termKey }} == 100 ? 'bg-green-100 text-green-800' : (termProgress.{{ $termKey }} > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800')"
+                              x-text="termProgress.{{ $termKey }} + '%'">
+                        </span>
                     </a>
                 @endforeach
             </nav>
@@ -362,7 +388,7 @@
                                     Import from Classroom
                                 </button>
                             @endif
-                            <a href="{{ route('subjects.show', $subject) }}#activities" 
+                            <a href="{{ route('activities.index', ['subject_id' => $subject->id]) }}" 
                                class="flex items-center px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-all duration-200 shadow-sm hover:shadow-md"
                                onmouseover="this.style.transform='translateY(-1px)';"
                                onmouseout="this.style.transform='translateY(0)';">
@@ -415,7 +441,14 @@
                                     Class Standing
                                 </th>
                                 <th rowspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 border-l border-yellow-200 min-w-32">
-                                    Exam Score
+                                    <div class="flex items-center justify-center gap-2">
+                                        <span>Exam Score</span>
+                                        <button onclick="openExamMaxScoreModal()" 
+                                                class="text-blue-600 hover:text-blue-800 transition-colors" 
+                                                title="Edit max score for all students">
+                                            <i class="fas fa-edit text-xs"></i>
+                                        </button>
+                                    </div>
                                 </th>
                                 <th rowspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-orange-50 border-l border-orange-200 min-w-32">
                                     Exam Grade
@@ -476,15 +509,16 @@
                                                 <td class="px-3 py-4 text-center bg-blue-25 border-l border-blue-100">
                                                     <input 
                                                         type="number" 
-                                                        class="w-16 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 grade-input"
+                                                        class="w-16 px-2 py-1 text-center text-sm border rounded focus:ring-2 grade-input {{ $activity->gcr_assignment_id ? 'bg-gray-100 cursor-not-allowed border-gray-200' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500' }}"
                                                         data-student-mapping-id="{{ $studentMapping->id }}"
                                                         data-activity-id="{{ $activity->id }}"
                                                         data-max-score="{{ $activity->max_score }}"
-                                                        value="{{ $gradeRecord?->score ?? '' }}"
+                                                        value="{{ $gradeRecord && $gradeRecord->score !== null ? ($gradeRecord->score == floor($gradeRecord->score) ? intval($gradeRecord->score) : $gradeRecord->score) : '' }}"
                                                         min="0"
                                                         max="{{ $activity->max_score }}"
-                                                        step="0.01"
+                                                        step="any"
                                                         placeholder="0"
+                                                        @if($activity->gcr_assignment_id) readonly title="This grade is synced from Google Classroom and cannot be edited manually" @endif
                                                     >
                                                     @if(isset($gradeRecord) && $gradeRecord && isset($gradeRecord->percentage))
                                                         <div class="text-xs text-gray-500 mt-1">{{ number_format($gradeRecord->percentage, 2) }}%</div>
@@ -502,15 +536,16 @@
                                                 <td class="px-3 py-4 text-center bg-purple-25 border-l border-purple-100">
                                                     <input 
                                                         type="number" 
-                                                        class="w-16 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 grade-input"
+                                                        class="w-16 px-2 py-1 text-center text-sm border rounded focus:ring-2 grade-input {{ $activity->gcr_assignment_id ? 'bg-gray-100 cursor-not-allowed border-gray-200' : 'border-gray-300 focus:ring-purple-500 focus:border-purple-500' }}"
                                                         data-student-mapping-id="{{ $studentMapping->id }}"
                                                         data-activity-id="{{ $activity->id }}"
                                                         data-max-score="{{ $activity->max_score }}"
-                                                        value="{{ $gradeRecord?->score ?? '' }}"
+                                                        value="{{ $gradeRecord && $gradeRecord->score !== null ? ($gradeRecord->score == floor($gradeRecord->score) ? intval($gradeRecord->score) : $gradeRecord->score) : '' }}"
                                                         min="0"
                                                         max="{{ $activity->max_score }}"
-                                                        step="0.01"
+                                                        step="any"
                                                         placeholder="0"
+                                                        @if($activity->gcr_assignment_id) readonly title="This grade is synced from Google Classroom and cannot be edited manually" @endif
                                                     >
                                                     @if(isset($gradeRecord) && $gradeRecord && isset($gradeRecord->percentage))
                                                         <div class="text-xs text-gray-500 mt-1">{{ number_format($gradeRecord->percentage, 2) }}%</div>
@@ -573,22 +608,24 @@
                                                     data-student-mapping-id="{{ $studentMapping->id }}"
                                                     data-subject-id="{{ $subject->id }}"
                                                     data-term="{{ $term }}"
-                                                    value="{{ isset($termGrade) && $termGrade && isset($termGrade->exam_score) ? $termGrade->exam_score : '' }}"
+                                                    value="{{ isset($termGrade) && $termGrade && $termGrade->exam_score !== null ? ($termGrade->exam_score == floor($termGrade->exam_score) ? intval($termGrade->exam_score) : $termGrade->exam_score) : '' }}"
                                                     min="0"
-                                                    step="0.01"
+                                                    step="any"
                                                     placeholder="0"
                                                 >
                                                 <span class="text-gray-500">/</span>
                                                 <input 
                                                     type="number" 
-                                                    class="w-16 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 exam-max-score-input"
+                                                    class="w-16 px-2 py-1 text-center text-sm border rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 exam-max-score-input bg-gray-100 cursor-not-allowed"
                                                     data-student-mapping-id="{{ $studentMapping->id }}"
                                                     data-subject-id="{{ $subject->id }}"
                                                     data-term="{{ $term }}"
-                                                    value="{{ isset($termGrade) && $termGrade && isset($termGrade->exam_max_score) ? $termGrade->exam_max_score : 100 }}"
+                                                    value="{{ isset($termGrade) && $termGrade && $termGrade->exam_max_score !== null ? ($termGrade->exam_max_score == floor($termGrade->exam_max_score) ? intval($termGrade->exam_max_score) : $termGrade->exam_max_score) : 100 }}"
                                                     min="1"
-                                                    step="0.01"
+                                                    step="any"
                                                     placeholder="100"
+                                                    readonly
+                                                    title="Click the edit button in the header to change max score for all students"
                                                 >
                                             </div>
                                         </td>
@@ -603,7 +640,7 @@
                                         <!-- Term Grade (Auto-calculated) -->
                                         <td class="px-6 py-4 text-center bg-red-25 border-l border-red-200">
                                             <div class="text-sm font-bold text-red-600">
-                                                {{ isset($termGrade) && $termGrade && isset($termGrade->term_grade) ? number_format($termGrade->term_grade, 0) : '-' }}
+                                                {{ isset($termGrade) && $termGrade && isset($termGrade->term_grade) ? number_format($termGrade->term_grade, 2) : '-' }}
                                             </div>
                                         </td>
                                     </tr>
@@ -889,24 +926,27 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to dynamically update Total CS and percentage
     function updateTotalCS(input) {
         const row = input.closest('tr');
-        const activityInputs = row.querySelectorAll('.activity-grade-input');
+        const activityInputs = row.querySelectorAll('.grade-input');
         const totalCSCell = row.querySelector('td.bg-teal-25');
         
-        if (!totalCSCell) return;
+        if (!totalCSCell) {
+            console.warn('Total CS cell not found');
+            return;
+        }
         
         let totalScore = 0;
         let totalPossible = 0;
         
         activityInputs.forEach(activityInput => {
             const score = parseFloat(activityInput.value) || 0;
-            const maxScore = parseFloat(activityInput.max) || 0;
+            const maxScore = parseFloat(activityInput.dataset.maxScore) || 0;
             
             totalScore += score;
             totalPossible += maxScore;
         });
         
         // Update the Total CS display
-        const scoreDisplay = totalCSCell.querySelector('.text-sm');
+        const scoreDisplay = totalCSCell.querySelector('.text-sm.font-semibold');
         const percentageDisplay = totalCSCell.querySelector('.text-xs');
         
         if (scoreDisplay) {
@@ -1006,18 +1046,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Update percentage display
                 const percentageDiv = input.parentElement.querySelector('.text-xs');
-                if (data.grade_record && data.grade_record.percentage !== null) {
-                    if (percentageDiv) {
-                        percentageDiv.textContent = data.grade_record.percentage.toFixed(2) + '%';
-                    } else {
-                        const newPercentageDiv = document.createElement('div');
-                        newPercentageDiv.className = 'text-xs text-gray-500 mt-1';
-                        newPercentageDiv.textContent = data.grade_record.percentage.toFixed(2) + '%';
-                        input.parentElement.appendChild(newPercentageDiv);
+                if (data.grade_record && data.grade_record.percentage !== null && data.grade_record.percentage !== undefined) {
+                    const percentage = parseFloat(data.grade_record.percentage);
+                    if (!isNaN(percentage)) {
+                        if (percentageDiv) {
+                            percentageDiv.textContent = percentage.toFixed(2) + '%';
+                        } else {
+                            const newPercentageDiv = document.createElement('div');
+                            newPercentageDiv.className = 'text-xs text-gray-500 mt-1';
+                            newPercentageDiv.textContent = percentage.toFixed(2) + '%';
+                            input.parentElement.appendChild(newPercentageDiv);
+                        }
                     }
                 } else if (percentageDiv) {
                     percentageDiv.remove();
                 }
+                
+                // Recalculate totals
+                updateTotalCS(input);
+                
+                // Reload class standing from server
+                reloadClassStanding(input.closest('tr'));
                 
                 // Remove saved state after 1.5 seconds
                 setTimeout(() => {
@@ -1057,6 +1106,56 @@ document.addEventListener('DOMContentLoaded', function() {
             
             showNotification(errorMessage, 'error');
         });
+    }
+
+    function reloadClassStanding(row) {
+        const studentMappingId = row.querySelector('.grade-input')?.dataset.studentMappingId;
+        const subjectId = '{{ $subject->id }}';
+        const term = '{{ $term }}';
+        
+        if (!studentMappingId) return;
+        
+        fetch(`/grades/get-term-grade?student_mapping_id=${studentMappingId}&subject_id=${subjectId}&term=${term}`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Find the Class Standing cell (has bg-green-25 class)
+            const classStandingCell = row.querySelector('td.bg-green-25 .text-sm');
+            if (classStandingCell && data.class_standing !== null && data.class_standing !== undefined) {
+                classStandingCell.textContent = parseFloat(data.class_standing).toFixed(2);
+            }
+            
+            // Update term progress after class standing is updated
+            updateTermProgress();
+        })
+        .catch(error => {
+            console.error('Error reloading class standing:', error);
+        });
+    }
+
+    function updateTermProgress() {
+        const totalStudents = document.querySelectorAll('tbody tr').length;
+        if (totalStudents === 0) return;
+        
+        // Count students with class standing (non-empty and not "-")
+        const studentsWithGrades = Array.from(document.querySelectorAll('tbody tr')).filter(row => {
+            const classStandingCell = row.querySelector('td.bg-green-25 .text-sm');
+            const classStanding = classStandingCell?.textContent.trim();
+            return classStanding && classStanding !== '-' && classStanding !== '0.00';
+        }).length;
+        
+        const percentage = Math.round((studentsWithGrades / totalStudents) * 100);
+        
+        // Update the Alpine.js data
+        const termTabsContainer = document.querySelector('[x-data*="termProgress"]');
+        if (termTabsContainer && termTabsContainer.__x) {
+            termTabsContainer.__x.$data.termProgress['{{ $term }}'] = percentage;
+        }
     }
 
     function saveExamScore(input) {
@@ -1126,29 +1225,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 input.classList.add('saved');
                 input.dataset.hasChanged = 'false';
                 
-                // Update computed grades in the same row
+                // Update computed grades in the same row using more specific selectors
                 const row = input.closest('tr');
-                const classStandingCell = row.querySelector('td.bg-green-25 div');
-                const examGradeCell = row.querySelector('td:nth-last-child(2) div');
-                const termGradeCell = row.querySelector('td:last-child div');
+                const classStandingCell = row.querySelector('td.bg-green-25 .text-sm');
+                const examGradeCell = row.querySelector('td.bg-orange-25 .text-sm');
+                const termGradeCell = row.querySelector('td.bg-red-25 .text-sm');
                 
                 // Update class standing with 2 decimals
-                if (data.term_grade && data.term_grade.class_standing !== null && data.term_grade.class_standing !== undefined) {
+                if (classStandingCell && data.term_grade && data.term_grade.class_standing !== null && data.term_grade.class_standing !== undefined) {
                     classStandingCell.textContent = parseFloat(data.term_grade.class_standing).toFixed(2);
                 }
                 
                 // Update exam grade with 2 decimals
-                if (data.term_grade && data.term_grade.exam_grade !== null) {
-                    examGradeCell.textContent = parseFloat(data.term_grade.exam_grade).toFixed(2);
-                } else {
-                    examGradeCell.textContent = '-';
+                if (examGradeCell) {
+                    if (data.term_grade && data.term_grade.exam_grade !== null) {
+                        examGradeCell.textContent = parseFloat(data.term_grade.exam_grade).toFixed(2);
+                    } else {
+                        examGradeCell.textContent = '-';
+                    }
                 }
                 
-                // Update term grade with 0 decimals (whole number)
-                if (data.term_grade && data.term_grade.term_grade !== null) {
-                    termGradeCell.textContent = parseFloat(data.term_grade.term_grade).toFixed(0);
-                } else {
-                    termGradeCell.textContent = '-';
+                // Update term grade with 2 decimals for accuracy
+                if (termGradeCell) {
+                    if (data.term_grade && data.term_grade.term_grade !== null) {
+                        termGradeCell.textContent = parseFloat(data.term_grade.term_grade).toFixed(2);
+                    } else {
+                        termGradeCell.textContent = '-';
+                    }
                 }
                 
                 // Remove saved state after 1.5 seconds
@@ -1371,5 +1474,143 @@ function saveFinalConfig() {
         showNotification('Failed to save configuration', 'error');
     });
 }
+
+// Exam Max Score Modal Functions
+function openExamMaxScoreModal() {
+    document.getElementById('examMaxScoreModal').classList.remove('hidden');
+    // Get the first exam max score input value as default
+    const firstMaxScore = document.querySelector('.exam-max-score-input')?.value || 100;
+    document.getElementById('bulkExamMaxScore').value = firstMaxScore;
+}
+
+function closeExamMaxScoreModal() {
+    document.getElementById('examMaxScoreModal').classList.add('hidden');
+}
+
+async function applyBulkExamMaxScore() {
+    const newMaxScore = parseFloat(document.getElementById('bulkExamMaxScore').value);
+    
+    if (!newMaxScore || newMaxScore <= 0) {
+        showNotification('Please enter a valid max score', 'error');
+        return;
+    }
+    
+    // Update all exam max score inputs and save each one
+    const examScoreInputs = document.querySelectorAll('.exam-score-input');
+    let updatedCount = 0;
+    let errors = 0;
+    
+    // Show loading state
+    showNotification('Updating exam max scores...', 'info');
+    
+    for (const scoreInput of examScoreInputs) {
+        try {
+            const studentMappingId = scoreInput.dataset.studentMappingId;
+            const subjectId = scoreInput.dataset.subjectId;
+            const term = scoreInput.dataset.term;
+            const examScore = scoreInput.value || null;
+            
+            // Find the corresponding max score input and update it
+            const maxScoreInput = scoreInput.closest('td').querySelector('.exam-max-score-input');
+            if (maxScoreInput) {
+                maxScoreInput.value = newMaxScore;
+            }
+            
+            // Save to database
+            const response = await fetch('{{ route("grades.update-exam-score") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    student_mapping_id: studentMappingId,
+                    subject_id: subjectId,
+                    term: term,
+                    exam_score: examScore,
+                    exam_max_score: newMaxScore
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                updatedCount++;
+                
+                // Update the exam grade and term grade in the UI
+                const row = scoreInput.closest('tr');
+                if (row && data.term_grade) {
+                    // Update exam grade
+                    const examGradeCell = row.querySelector('td.bg-orange-25 .text-sm');
+                    if (examGradeCell && data.term_grade.exam_grade !== null) {
+                        examGradeCell.textContent = parseFloat(data.term_grade.exam_grade).toFixed(2);
+                    }
+                    
+                    // Update term grade
+                    const termGradeCell = row.querySelector('td.bg-red-25 .text-sm');
+                    if (termGradeCell && data.term_grade.term_grade !== null) {
+                        termGradeCell.textContent = parseFloat(data.term_grade.term_grade).toFixed(2);
+                    }
+                }
+            } else {
+                errors++;
+            }
+        } catch (error) {
+            console.error('Error updating max score:', error);
+            errors++;
+        }
+    }
+    
+    closeExamMaxScoreModal();
+    
+    if (errors === 0) {
+        showNotification(`Successfully updated exam max score to ${newMaxScore} for ${updatedCount} students`, 'success');
+    } else {
+        showNotification(`Updated ${updatedCount} students, ${errors} failed`, 'warning');
+    }
+}
 </script>
+
+<!-- Exam Max Score Modal -->
+<div id="examMaxScoreModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Edit Exam Max Score</h3>
+            <button onclick="closeExamMaxScoreModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+                Max Score (will apply to all students)
+            </label>
+            <input 
+                type="number" 
+                id="bulkExamMaxScore"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                min="1"
+                step="0.01"
+                placeholder="100"
+            >
+            <p class="text-xs text-gray-500 mt-2">
+                This will update the exam max score for all students in this term.
+            </p>
+        </div>
+        
+        <div class="flex justify-end space-x-3">
+            <button 
+                onclick="closeExamMaxScoreModal()"
+                class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors">
+                Cancel
+            </button>
+            <button 
+                onclick="applyBulkExamMaxScore()"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors">
+                Apply to All
+            </button>
+        </div>
+    </div>
+</div>
+
 @endsection

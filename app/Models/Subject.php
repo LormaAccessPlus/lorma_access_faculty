@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -28,13 +29,16 @@ class Subject extends Model
         'mapping_status',
         'student_mappings_count',
         'mapping_notes',
-        'final_rating_config'
+        'final_rating_config',
+        'comprehensive_exam_scores',
+        'matrix_type'
     ];
 
     protected $casts = [
         'school_subject_id' => 'integer',
         'faculty_id' => 'integer',
         'final_rating_config' => 'array',
+        'comprehensive_exam_scores' => 'array',
     ];
 
     public function faculty(): BelongsTo
@@ -50,6 +54,13 @@ class Subject extends Model
     public function studentMappings(): HasMany
     {
         return $this->hasMany(StudentMapping::class);
+    }
+
+    public function students(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class, 'student_subject')
+            ->withPivot('status')
+            ->withTimestamps();
     }
 
     public function isLectureOnly(): bool

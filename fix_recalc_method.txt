@@ -1,0 +1,10 @@
+            // Recalculate class standing using the specified matrix type
+            $recalculateMethod = $reflection->getMethod('recalculateClassStanding');
+            $recalculateMethod->setAccessible(true);
+            $recalculateMethod->invoke($gradeController, $studentMapping, $termGrade->term, $matrixType);
+            
+            // Also recalculate the term grade (including exam grade) with the correct formula
+            $termGrade->refresh(); // Reload from database after class standing recalculation
+            $calculateMethod = $reflection->getMethod('calculateTermGrade');
+            $calculateMethod->setAccessible(true);
+            $calculateMethod->invoke($gradeController, $termGrade, $matrixType);

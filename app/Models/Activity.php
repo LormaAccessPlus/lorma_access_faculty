@@ -17,6 +17,7 @@ class Activity extends Model
         'term',
         'max_score',
         'weight',
+        'activity_category',
         'gcr_assignment_id'
     ];
 

@@ -69,7 +69,6 @@
                     <p class="text-sm text-gray-600 mt-1">Create, edit, and organize your activities</p>
                 </div>
                 <div class="flex items-center space-x-3">
-                    @if($subject->gcr_class_id)
                     <button @click="showCourseworkModal = true; loadAvailableCoursework()" 
                             :disabled="loadingCoursework"
                             class="flex items-center px-4 py-2 text-white rounded-lg font-medium transition-all duration-200 disabled:opacity-50 shadow-sm hover:shadow-md"
@@ -82,7 +81,6 @@
                             <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
                         </span>
                     </button>
-                    @endif
                     <button @click="showAddActivityModal = true" 
                             class="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
                             onmouseover="this.style.transform='translateY(-1px)';"
@@ -347,6 +345,23 @@
                         </div>
                     </div>
                     
+                    <!-- Activity Category (for Nursing Matrix) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-th-list mr-1"></i>Category
+                            <span class="text-xs text-gray-500">(For Nursing Matrix)</span>
+                        </label>
+                        <select x-model="newActivity.activity_category" 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                            <option value="activity">📝 Activity (15% weight)</option>
+                            <option value="quiz">❓ Quiz (25% weight)</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Quizzes have higher weight (25%) in nursing matrix calculations
+                        </p>
+                    </div>
+                    
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -406,12 +421,14 @@
          x-transition:leave="transition ease-in duration-200"
          x-transition:leave-start="opacity-100 scale-100"
          x-transition:leave-end="opacity-0 scale-95"
-         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+         class="fixed inset-0 bg-black bg-opacity-50 z-50"
+         :class="modalFullscreen ? '' : 'flex items-center justify-center p-4'"
          style="display: none;"
          @click.self="showCourseworkModal = false; resetCourseworkModal()">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform transition-all">
+        <div class="bg-white shadow-2xl w-full overflow-hidden transform transition-all flex flex-col"
+             :class="modalFullscreen ? 'h-full max-w-none rounded-none' : 'max-w-4xl max-h-[90vh] rounded-xl m-auto'">
             <!-- Modal Header -->
-            <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-green-50">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-green-50 flex-shrink-0">
                 <div class="flex items-center justify-between">
                     <div>
                         <h3 class="text-xl font-semibold text-gray-900 flex items-center">
@@ -420,10 +437,17 @@
                         </h3>
                         <p class="text-sm text-gray-600 mt-1">Select coursework to import as activities</p>
                     </div>
-                    <button @click="showCourseworkModal = false; resetCourseworkModal()" 
-                            class="text-gray-400 hover:text-gray-600 transition-colors">
-                        <i class="fas fa-times text-xl"></i>
-                    </button>
+                    <div class="flex items-center space-x-2">
+                        <button @click="modalFullscreen = !modalFullscreen" 
+                                class="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                                :title="modalFullscreen ? 'Exit Fullscreen' : 'Fullscreen'">
+                            <i class="fas text-lg" :class="modalFullscreen ? 'fa-compress' : 'fa-expand'"></i>
+                        </button>
+                        <button @click="showCourseworkModal = false; resetCourseworkModal(); modalFullscreen = false" 
+                                class="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100">
+                            <i class="fas fa-times text-lg"></i>
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Stats Bar -->
@@ -444,7 +468,7 @@
             </div>
             
             <!-- Modal Body -->
-            <div class="flex-1 overflow-hidden">
+            <div class="flex-1 overflow-hidden flex flex-col">
                 <!-- Loading State -->
                 <div x-show="loadingCoursework" class="flex items-center justify-center py-12">
                     <div class="text-center">
@@ -454,7 +478,7 @@
                 </div>
                 
                 <!-- Import Options -->
-                <div x-show="!loadingCoursework && availableCoursework.length > 0" class="p-6 border-b border-gray-200">
+                <div x-show="!loadingCoursework && availableCoursework.length > 0" class="p-6 border-b border-gray-200 flex-shrink-0">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Default Term</label>
@@ -495,14 +519,15 @@
                 </div>
                 
                 <!-- Coursework List -->
-                <div x-show="!loadingCoursework" class="max-h-96 overflow-y-auto">
+                <div x-show="!loadingCoursework" class="flex-1 overflow-y-auto">
                     <div x-show="availableCoursework.length === 0" class="text-center py-12">
                         <i class="fas fa-inbox text-4xl text-gray-400 mb-4"></i>
                         <h4 class="text-lg font-medium text-gray-900 mb-2">No Coursework Found</h4>
                         <p class="text-gray-600">No coursework found in your Google Classroom.</p>
                     </div>
                     
-                    <div x-show="availableCoursework.length > 0" class="divide-y divide-gray-200">
+                    <!-- List View (Normal Mode) -->
+                    <div x-show="availableCoursework.length > 0 && !modalFullscreen" class="divide-y divide-gray-200">
                         <template x-for="coursework in availableCoursework" :key="coursework.id">
                             <div class="p-4 hover:bg-gray-50 transition-colors"
                                  :class="coursework.is_imported ? 'opacity-60' : ''">
@@ -542,24 +567,85 @@
                             </div>
                         </template>
                     </div>
+                    
+                    <!-- Grid View (Fullscreen Mode) -->
+                    <div x-show="availableCoursework.length > 0 && modalFullscreen" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-6">
+                        <template x-for="coursework in availableCoursework" :key="coursework.id">
+                            <div class="bg-white border-2 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer"
+                                 :class="coursework.is_imported ? 'opacity-60 border-gray-200' : selectedCoursework.includes(coursework.id) ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'"
+                                 @click="if (!coursework.is_imported) { 
+                                     if (selectedCoursework.includes(coursework.id)) {
+                                         selectedCoursework = selectedCoursework.filter(id => id !== coursework.id);
+                                     } else {
+                                         selectedCoursework.push(coursework.id);
+                                     }
+                                 }">
+                                <div class="flex items-start justify-between mb-3">
+                                    <div class="flex-shrink-0">
+                                        <input type="checkbox" 
+                                               :value="coursework.id"
+                                               x-model="selectedCoursework"
+                                               :disabled="coursework.is_imported"
+                                               @click.stop
+                                               class="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                    </div>
+                                    <div class="flex-shrink-0 ml-2">
+                                        <a :href="coursework.alternate_link" 
+                                           target="_blank"
+                                           @click.stop
+                                           class="text-blue-600 hover:text-blue-800 text-sm">
+                                            <i class="fas fa-external-link-alt"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <h4 class="text-sm font-semibold text-gray-900 mb-2 line-clamp-2" x-text="coursework.title"></h4>
+                                    <span x-show="coursework.is_imported" 
+                                          class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        ✓ Imported
+                                    </span>
+                                </div>
+                                
+                                <p x-show="coursework.description" 
+                                   class="text-xs text-gray-600 mb-3 line-clamp-3" 
+                                   x-text="coursework.description"></p>
+                                
+                                <div class="space-y-1 text-xs text-gray-500 border-t pt-2">
+                                    <div class="flex justify-between">
+                                        <span>Max Points:</span>
+                                        <span class="font-medium text-gray-900" x-text="coursework.max_points"></span>
+                                    </div>
+                                    <div x-show="coursework.due_date" class="flex justify-between">
+                                        <span>Due:</span>
+                                        <span class="font-medium text-gray-900" x-text="formatDate(coursework.due_date)"></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Status:</span>
+                                        <span class="font-medium text-gray-900 capitalize" x-text="coursework.state"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
                 </div>
             </div>
             
             <!-- Modal Footer -->
             <div x-show="!loadingCoursework && availableCoursework.length > 0" 
-                 class="px-6 py-4 border-t border-gray-200 bg-gray-50">
-                <div class="flex items-center justify-between">
-                    <div class="text-sm text-gray-600">
+                 class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="text-sm text-gray-600 text-center sm:text-left">
                         <span x-text="selectedCoursework.length"></span> coursework selected for import
                     </div>
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-3 flex-shrink-0">
                         <button @click="showCourseworkModal = false; resetCourseworkModal()"
-                                class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors">
+                                class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors whitespace-nowrap">
                             Cancel
                         </button>
                         <button @click="importSelectedCoursework()" 
                                 :disabled="selectedCoursework.length === 0 || importing"
-                                class="flex items-center px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-all">
+                                class="flex items-center px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-all whitespace-nowrap">
                             <span x-show="!importing">
                                 <i class="fab fa-google mr-2"></i>Import Selected
                             </span>
@@ -672,6 +758,7 @@ function activityManager(subjectId) {
         loadingCoursework: false,
         importing: false,
         activeTab: 'prelim',
+        modalFullscreen: false,
         availableCoursework: [],
         selectedCoursework: [],
         courseworkStats: {
@@ -689,6 +776,7 @@ function activityManager(subjectId) {
             term: '',
             max_score: '',
             weight: '',
+            activity_category: 'activity',
             subject_id: subjectId
         },
         
@@ -930,6 +1018,7 @@ function activityManager(subjectId) {
                 term: '',
                 max_score: '',
                 weight: '',
+                activity_category: 'activity',
                 subject_id: subjectId
             };
         },

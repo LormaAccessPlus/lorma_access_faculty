@@ -48,7 +48,14 @@ class ViewServiceProvider extends ServiceProvider
                 }
                 
                 if ($faculty) {
+                    // Get current academic year and semester from config
+                    $currentAcademicYear = config('app.current_academic_year', '2024-2025');
+                    $currentSemester = config('app.current_semester', '1');
+                    
+                    // Filter subjects by current semester only
                     $facultySubjects = Subject::where('faculty_id', $faculty->id)
+                        ->where('academic_year', $currentAcademicYear)
+                        ->where('semester', $currentSemester)
                         ->orderBy('subject_code')
                         ->get();
                 }

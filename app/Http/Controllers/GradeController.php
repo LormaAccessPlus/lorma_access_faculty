@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Barryvdh\DomPDF\Facade\Pdf as PDF;
 
 class GradeController extends Controller
 {
@@ -56,7 +57,24 @@ class GradeController extends Controller
             $gradeMatrix[$record->student_mapping_id][$record->activity_id] = $record;
         }
 
-        return view('grades.matrix', compact('subject', 'activitiesByTerm', 'gradeMatrix'));
+        // Recalculate all term grades to ensure exam_grade is always correct
+        // This ensures that when the page loads, all calculations follow the current formula
+        $termGrades = TermGrade::where('subject_id', $subject->id)->get();
+        foreach ($termGrades as $termGrade) {
+            // Only recalculate if there's an exam score
+            if ($termGrade->exam_score !== null) {
+                $this->calculateTermGrade($termGrade, $subject->matrix_type);
+            }
+        }
+
+        // Get final rating configuration
+        $finalRatingConfig = $subject->final_rating_config ?? [
+            'prelim_weight' => 30,
+            'midterm_weight' => 30,
+            'finals_weight' => 40
+        ];
+
+        return view('grades.matrix', compact('subject', 'activitiesByTerm', 'gradeMatrix', 'finalRatingConfig'));
     }
 
     /**
@@ -103,6 +121,37 @@ class GradeController extends Controller
         }
 
         // Get existing term grades
+        $termGrades = TermGrade::where('subject_id', $subject->id)
+            ->where('term', $term)
+            ->get()
+            ->keyBy('student_mapping_id');
+
+        // Auto-calculate class standing for students who have grades but no class standing
+        foreach ($subject->studentMappings as $studentMapping) {
+            $hasGrades = isset($gradeMatrix[$studentMapping->id]) && !empty($gradeMatrix[$studentMapping->id]);
+            $hasClassStanding = isset($termGrades[$studentMapping->id]) && $termGrades[$studentMapping->id]->class_standing !== null;
+            
+            if ($hasGrades && !$hasClassStanding) {
+                $this->recalculateClassStanding($studentMapping, $term);
+            }
+        }
+        
+        // Reload term grades after auto-calculation
+        $termGrades = TermGrade::where('subject_id', $subject->id)
+            ->where('term', $term)
+            ->get()
+            ->keyBy('student_mapping_id');
+
+        // Recalculate all term grades for this term to ensure exam_grade is always correct
+        // This ensures that when the page loads, all calculations follow the current formula
+        foreach ($termGrades as $termGrade) {
+            // Only recalculate if there's an exam score
+            if ($termGrade->exam_score !== null) {
+                $this->calculateTermGrade($termGrade, $subject->matrix_type);
+            }
+        }
+
+        // Reload term grades after recalculation
         $termGrades = TermGrade::where('subject_id', $subject->id)
             ->where('term', $term)
             ->get()
@@ -215,6 +264,7 @@ class GradeController extends Controller
     public function saveFinalRatingConfig(Request $request, Subject $subject): JsonResponse
     {
         $request->validate([
+            'subject_type' => 'nullable|string|in:lecture,lab',
             'prelim_weight' => 'required|numeric|min:0|max:100',
             'midterm_weight' => 'required|numeric|min:0|max:100',
             'finals_weight' => 'required|numeric|min:0|max:100',
@@ -229,12 +279,29 @@ class GradeController extends Controller
             ], 422);
         }
 
+        $newConfig = [
+            'subject_type' => $request->subject_type ?? 'lecture',
+            'prelim_weight' => $request->prelim_weight,
+            'midterm_weight' => $request->midterm_weight,
+            'finals_weight' => $request->finals_weight,
+        ];
+
+        Log::info('Saving final rating config', [
+            'subject_id' => $subject->id,
+            'old_config' => $subject->final_rating_config,
+            'new_config' => $newConfig
+        ]);
+
         $subject->update([
-            'final_rating_config' => [
-                'prelim_weight' => $request->prelim_weight,
-                'midterm_weight' => $request->midterm_weight,
-                'finals_weight' => $request->finals_weight,
-            ]
+            'final_rating_config' => $newConfig
+        ]);
+
+        // Refresh the subject to get the updated config
+        $subject->refresh();
+
+        Log::info('After save and refresh', [
+            'subject_id' => $subject->id,
+            'config_from_db' => $subject->final_rating_config
         ]);
 
         // Recalculate final ratings for all students with the new weights
@@ -242,7 +309,8 @@ class GradeController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Final rating configuration saved and final ratings recalculated successfully'
+            'message' => 'Final rating configuration saved and final ratings recalculated successfully',
+            'config' => $subject->final_rating_config
         ]);
     }
 
@@ -302,8 +370,11 @@ class GradeController extends Controller
             // Refresh the model to get the calculated percentage
             $gradeRecord->refresh();
 
+            // Get matrix type from request (if provided)
+            $matrixType = $request->input('matrix_type', null);
+            
             // Recalculate class standing for this student and term
-            $this->recalculateClassStanding($studentMapping, $activity->term);
+            $this->recalculateClassStanding($studentMapping, $activity->term, $matrixType);
 
             return response()->json([
                 'success' => true,
@@ -353,22 +424,121 @@ class GradeController extends Controller
             return response()->json(['error' => 'Exam score cannot exceed maximum score'], 400);
         }
 
-        // Find or create term grade record
-        $termGrade = TermGrade::updateOrCreate(
-            [
-                'student_mapping_id' => $request->student_mapping_id,
-                'subject_id' => $request->subject_id,
-                'term' => $request->term,
-            ],
-            [
-                'exam_score' => $request->exam_score,
-                'exam_max_score' => $request->exam_max_score ?? 100,
-            ]
-        );
+        // Get matrix type from request (from the page/route), NOT from database
+        $subject = Subject::find($request->subject_id);
+        $matrixType = $request->input('matrix_type', null);
+        
+        // If no matrix type provided in request, fall back to subject's matrix_type
+        if (!$matrixType) {
+            $matrixType = $subject->matrix_type;
+        }
+        
+        $isNursing = $matrixType === 'nursing';
 
-        // Recalculate term grade if we have both class standing and exam score
-        if ($termGrade->class_standing !== null && $termGrade->exam_score !== null) {
-            $termGrade = $this->calculateTermGrade($termGrade);
+        if ($isNursing) {
+            // For nursing, recalculate the entire term grade with activities and quizzes
+            $gradeRecords = GradeRecord::whereHas('activity', function ($query) use ($studentMapping, $request) {
+                $query->where('subject_id', $studentMapping->subject_id)
+                      ->where('term', $request->term);
+            })->where('student_mapping_id', $studentMapping->id)->get();
+
+            // Get all activities for this term
+            $activities = Activity::where('subject_id', $studentMapping->subject_id)
+                ->where('term', $request->term)
+                ->get();
+
+            // Separate activities and quizzes
+            $activityRecords = collect();
+            $quizRecords = collect();
+            
+            foreach ($gradeRecords as $gradeRecord) {
+                $activity = $activities->firstWhere('id', $gradeRecord->activity_id);
+                if ($activity) {
+                    if ($activity->activity_category === 'quiz') {
+                        $quizRecords->push($gradeRecord);
+                    } else {
+                        $activityRecords->push($gradeRecord);
+                    }
+                }
+            }
+
+            // Calculate totals
+            // Sum scores from grade records, but max scores from ALL activities (not just graded ones)
+            $activitiesTotal = 0;
+            $activitiesMax = 0;
+            
+            foreach ($activities->where('activity_category', '!=', 'quiz') as $activity) {
+                $gradeRecord = $gradeRecords->firstWhere('activity_id', $activity->id);
+                if ($gradeRecord && $gradeRecord->score !== null) {
+                    $activitiesTotal += floatval($gradeRecord->score);
+                }
+                // Always add max score, even if no grade record exists
+                $activitiesMax += floatval($activity->max_score);
+            }
+            
+            // Calculate totals for quizzes
+            $quizzesTotal = 0;
+            $quizzesMax = 0;
+            
+            foreach ($activities->where('activity_category', 'quiz') as $quiz) {
+                $gradeRecord = $gradeRecords->firstWhere('activity_id', $quiz->id);
+                if ($gradeRecord && $gradeRecord->score !== null) {
+                    $quizzesTotal += floatval($gradeRecord->score);
+                }
+                // Always add max score, even if no grade record exists
+                $quizzesMax += floatval($quiz->max_score);
+            }
+
+            // Use nursing calculator
+            $calculator = new \App\Services\NursingGradeCalculator();
+            
+            $activitiesScore = $calculator->calculateActivityScore($activitiesTotal, $activitiesMax);
+            $quizzesScore = $calculator->calculateQuizScore($quizzesTotal, $quizzesMax);
+            $examGrade = $calculator->calculateExamScore($request->exam_score ?? 0, $request->exam_max_score ?? 100);
+            $termGradeValue = $calculator->calculateTermGrade($activitiesScore, $quizzesScore, $examGrade);
+
+            // Update or create term grade record
+            $termGrade = TermGrade::updateOrCreate(
+                [
+                    'student_mapping_id' => $request->student_mapping_id,
+                    'subject_id' => $request->subject_id,
+                    'term' => $request->term,
+                ],
+                [
+                    'exam_score' => $request->exam_score,
+                    'exam_max_score' => $request->exam_max_score ?? 100,
+                    'exam_grade' => round($examGrade, 2),
+                    'term_grade' => round($termGradeValue, 2),
+                    'computation_config' => [
+                        'activities_total' => $activitiesTotal,
+                        'activities_max' => $activitiesMax,
+                        'activities_score' => round($activitiesScore, 2),
+                        'quizzes_total' => $quizzesTotal,
+                        'quizzes_max' => $quizzesMax,
+                        'quizzes_score' => round($quizzesScore, 2),
+                        'exam_total' => $request->exam_score ?? 0,
+                        'exam_max' => $request->exam_max_score ?? 100,
+                    ],
+                ]
+            );
+        } else {
+            // Find or create term grade record
+            $termGrade = TermGrade::updateOrCreate(
+                [
+                    'student_mapping_id' => $request->student_mapping_id,
+                    'subject_id' => $request->subject_id,
+                    'term' => $request->term,
+                ],
+                [
+                    'exam_score' => $request->exam_score,
+                    'exam_max_score' => $request->exam_max_score ?? 100,
+                ]
+            );
+
+            // Always recalculate term grade when exam score is updated
+            // This ensures exam_grade is always calculated with the correct formula
+            // Use the matrix_type from the request (page/route), not from database
+            $termGrade = $this->calculateTermGrade($termGrade, $matrixType);
         }
 
         return response()->json([
@@ -405,14 +575,21 @@ class GradeController extends Controller
                 'exam_score' => null,
                 'exam_grade' => null,
                 'term_grade' => null,
+                'activities_score' => null,
+                'quizzes_score' => null,
             ]);
         }
 
+        // Extract nursing-specific scores from computation_config if available
+        $computationConfig = $termGrade->computation_config ?? [];
+        
         return response()->json([
             'class_standing' => $termGrade->class_standing,
             'exam_score' => $termGrade->exam_score,
             'exam_grade' => $termGrade->exam_grade,
             'term_grade' => $termGrade->term_grade,
+            'activities_score' => $computationConfig['activities_score'] ?? null,
+            'quizzes_score' => $computationConfig['quizzes_score'] ?? null,
         ]);
     }
 
@@ -444,37 +621,90 @@ class GradeController extends Controller
     /**
      * Calculate term grade based on class standing and exam score
      */
-    private function calculateTermGrade(TermGrade $termGrade): TermGrade
+    private function calculateTermGrade(TermGrade $termGrade, ?string $matrixType = null): TermGrade
     {
-        // Get grading configuration from database for this subject and term
-        $gradingConfig = \App\Models\GradingConfig::where('subject_id', $termGrade->subject_id)
-            ->where('term', $termGrade->term)
-            ->first();
-        
-        // Fallback to config file if no database config exists
-        if (!$gradingConfig) {
-            $config = config('grading');
-            $classWeight = $config[$termGrade->term]['class_weight'];
-            $examWeight = $config[$termGrade->term]['exam_weight'];
+        // Matrix type should be provided from the page/route
+        // If not provided, we cannot calculate correctly
+        if (!$matrixType) {
+            // Fallback: try to get from subject (for backward compatibility)
+            $subject = Subject::find($termGrade->subject_id);
+            if ($subject && $subject->matrix_type) {
+                $matrixType = $subject->matrix_type;
+            } else {
+                // No matrix type available - cannot calculate
+                return $termGrade;
+            }
+        }
+
+        // Check if this is a nursing subject
+        $isNursing = $matrixType === 'nursing';
+
+        if ($isNursing) {
+            // For nursing, use the nursing-specific calculation
+            // But we still need to calculate it here for exam score updates
+            // Only skip if class_standing is null (no activities graded yet)
+            if ($termGrade->class_standing === null) {
+                return $termGrade->fresh();
+            }
+        }
+
+        // ALWAYS use the matrix type formula if available
+        // This ensures consistency with the matrix type's defined weights
+        if ($matrixType) {
+            $formulaConfig = \App\Services\MatrixFormulaService::getFormulaConfig($matrixType, $termGrade->term);
+            $classWeight = $formulaConfig['class_standing_weight'] / 100;
+            $examWeight = $formulaConfig['exam_weight'] / 100;
+            $examFormulaType = $formulaConfig['exam_formula'];
         } else {
-            $classWeight = $gradingConfig->class_standing_weight / 100;
-            $examWeight = $gradingConfig->exam_weight / 100;
+            // Only fall back to database config if no matrix type is available
+            // This should rarely happen
+            $gradingConfig = \App\Models\GradingConfig::where('subject_id', $termGrade->subject_id)
+                ->where('term', $termGrade->term)
+                ->first();
+            
+            // Fallback to config file if no database config exists
+            if (!$gradingConfig) {
+                $config = config('grading');
+                $classWeight = $config[$termGrade->term]['class_weight'];
+                $examWeight = $config[$termGrade->term]['exam_weight'];
+                $examFormulaType = 'percentage';
+            } else {
+                $classWeight = $gradingConfig->class_standing_weight / 100;
+                $examWeight = $gradingConfig->exam_weight / 100;
+                $examFormulaType = $gradingConfig->formula_config['type'] ?? 'percentage';
+            }
         }
         
-        // Calculate exam percentage: (score / max_score) × 100
-        $examMaxScore = $termGrade->exam_max_score ?? 100;
-        $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
+        // Calculate raw exam score using the appropriate formula
+        $rawExamScore = 0;
+        if ($termGrade->exam_score !== null) {
+            $examMaxScore = $termGrade->exam_max_score ?? 100;
+            
+            // Calculate raw exam score using the formula service
+            // For general education: (score/max) × 50 + 50 (transmuted)
+            // Example: (22/30) × 50 + 50 = 86.67
+            $rawExamScore = \App\Services\MatrixFormulaService::calculateExamScore(
+                $termGrade->exam_score,
+                $examMaxScore,
+                $examFormulaType
+            );
+        }
         
-        // Calculate exam grade as weighted percentage
-        // Exam Grade = Percentage × Exam Weight %
-        // Example: 60% × 60% = 36
-        $examGrade = $examPercentage * ($examWeight);
+        // Apply weight to exam score to get weighted exam grade contribution
+        // For general education: 86.67 × 33.33% = 28.89
+        // For zero-based: 90 × 60% = 54
+        $weightedExamGrade = $rawExamScore * $examWeight;
         
-        // Calculate term grade
-        $termGradeValue = $termGrade->class_standing + $examGrade;
+        // Calculate term grade by adding weighted class standing and weighted exam grade
+        // Note: class_standing is already weighted (stored as contribution to term grade)
+        // Example: 63.45 (weighted CS) + 28.89 (weighted exam) = 92.34
+        $termGradeValue = ($termGrade->class_standing ?? 0) + $weightedExamGrade;
 
+        // Store the WEIGHTED exam grade (after applying weight) in exam_grade for display
+        // This shows the weighted contribution to the term grade
+        // Example: For zero-based with 90/100 exam: (90/100)*100 = 90, then 90 × 60% = 54 (displayed as Exam Grade)
         $termGrade->update([
-            'exam_grade' => round($examGrade, 2),
+            'exam_grade' => $termGrade->exam_score !== null ? round($weightedExamGrade, 2) : null,
             'term_grade' => round($termGradeValue, 2),
         ]);
 
@@ -484,7 +714,7 @@ class GradeController extends Controller
     /**
      * Recalculate class standing for a student in a specific term
      */
-    private function recalculateClassStanding(StudentMapping $studentMapping, string $term): void
+    private function recalculateClassStanding(StudentMapping $studentMapping, string $term, ?string $matrixType = null): void
     {
         // Get all grade records for this student in this term
         $gradeRecords = GradeRecord::whereHas('activity', function ($query) use ($studentMapping, $term) {
@@ -492,7 +722,35 @@ class GradeController extends Controller
                   ->where('term', $term);
         })->where('student_mapping_id', $studentMapping->id)->get();
 
+        Log::info('Recalculating class standing', [
+            'student_mapping_id' => $studentMapping->id,
+            'term' => $term,
+            'matrix_type' => $matrixType,
+            'grade_records_count' => $gradeRecords->count()
+        ]);
+
         if ($gradeRecords->isEmpty()) {
+            Log::info('No grade records found for student in term', [
+                'student_mapping_id' => $studentMapping->id,
+                'term' => $term
+            ]);
+            return;
+        }
+
+        // Check if this is a nursing subject
+        $subject = Subject::find($studentMapping->subject_id);
+        $isNursing = $matrixType === 'nursing';
+
+        Log::info('Checking if nursing', [
+            'matrix_type_param' => $matrixType,
+            'subject_matrix_type' => $subject?->matrix_type,
+            'is_nursing' => $isNursing
+        ]);
+
+        if ($isNursing) {
+            // Use nursing-specific calculation
+            Log::info('Using nursing calculation');
+            $this->recalculateNursingTermGrade($studentMapping, $term, $gradeRecords);
             return;
         }
 
@@ -500,25 +758,64 @@ class GradeController extends Controller
         $totalScore = $gradeRecords->sum('score');
         $totalPossible = $gradeRecords->sum('max_score');
 
+        Log::info('Class standing calculation', [
+            'student_mapping_id' => $studentMapping->id,
+            'term' => $term,
+            'total_score' => $totalScore,
+            'total_possible' => $totalPossible
+        ]);
+
         if ($totalPossible == 0) {
+            Log::warning('Total possible score is 0', [
+                'student_mapping_id' => $studentMapping->id,
+                'term' => $term
+            ]);
             return;
         }
 
-        // Get grading configuration to get the activity weight
-        $gradingConfig = \App\Models\GradingConfig::where('subject_id', $studentMapping->subject_id)
-            ->where('term', $term)
-            ->first();
+        // If matrix type is provided, use it to determine formula
+        // Otherwise, fall back to database config
+        if ($matrixType) {
+            $formulaConfig = \App\Services\MatrixFormulaService::getFormulaConfig($matrixType, $term);
+            $formulaType = $formulaConfig['cs_formula'];
+            $csWeight = $formulaConfig['class_standing_weight'];
+        } else {
+            // Get grading configuration from database
+            $gradingConfig = \App\Models\GradingConfig::where('subject_id', $studentMapping->subject_id)
+                ->where('term', $term)
+                ->first();
+            
+            // Get formula type from config (default to 'percentage')
+            $formulaType = 'percentage';
+            $csWeight = 40; // default weight
+            if ($gradingConfig) {
+                if (isset($gradingConfig->formula_config['type'])) {
+                    $formulaType = $gradingConfig->formula_config['type'];
+                }
+                $csWeight = $gradingConfig->class_standing_weight;
+            }
+        }
         
-        // Get activity weight (default to 40% if not configured)
-        $activityWeight = $gradingConfig ? $gradingConfig->class_standing_weight : 40;
+        // Calculate raw class standing score using the formula service
+        $rawClassStanding = \App\Services\MatrixFormulaService::calculateClassStanding(
+            $totalScore,
+            $totalPossible,
+            $formulaType
+        );
         
-        // Calculate class standing percentage
-        $classStandingPercentage = ($totalScore / $totalPossible) * 100;
+        // Apply weight to get the weighted class standing (contribution to term grade)
+        // Example: 95.17 × 66.67% = 63.45
+        $classStanding = $rawClassStanding * ($csWeight / 100);
 
-        // Apply the activity weight to get the class standing
-        // Class Standing = Percentage × Activity Weight %
-        // Example: 75.3% × 40% = 30.13
-        $classStanding = $classStandingPercentage * ($activityWeight / 100);
+        Log::info('Class standing calculated', [
+            'student_mapping_id' => $studentMapping->id,
+            'term' => $term,
+            'raw_class_standing' => $rawClassStanding,
+            'cs_weight' => $csWeight,
+            'weighted_class_standing' => $classStanding,
+            'formula_type' => $formulaType,
+            'matrix_type' => $matrixType
+        ]);
 
         // Update or create term grade record
         $termGrade = TermGrade::updateOrCreate(
@@ -532,10 +829,118 @@ class GradeController extends Controller
             ]
         );
 
-        // Recalculate term grade if we have both class standing and exam score
-        if ($termGrade->exam_score !== null) {
-            $this->calculateTermGrade($termGrade);
+        // Always recalculate term grade (will handle null exam scores)
+        $this->calculateTermGrade($termGrade, $matrixType);
+    }
+
+    /**
+     * Recalculate nursing term grade with activities and quizzes separated
+     */
+    private function recalculateNursingTermGrade(StudentMapping $studentMapping, string $term, $gradeRecords): void
+    {
+        // Get all activities for this term
+        $activities = Activity::where('subject_id', $studentMapping->subject_id)
+            ->where('term', $term)
+            ->get();
+
+        // Separate activities and quizzes
+        $activityRecords = collect();
+        $quizRecords = collect();
+        
+        foreach ($gradeRecords as $gradeRecord) {
+            $activity = $activities->firstWhere('id', $gradeRecord->activity_id);
+            if ($activity) {
+                if ($activity->activity_category === 'quiz') {
+                    $quizRecords->push($gradeRecord);
+                } else {
+                    $activityRecords->push($gradeRecord);
+                }
+            }
         }
+
+        // Calculate totals for activities
+        // Sum scores from grade records, but max scores from ALL activities (not just graded ones)
+        $activitiesTotal = 0;
+        $activitiesMax = 0;
+        
+        foreach ($activities->where('activity_category', '!=', 'quiz') as $activity) {
+            $gradeRecord = $gradeRecords->firstWhere('activity_id', $activity->id);
+            if ($gradeRecord && $gradeRecord->score !== null) {
+                $activitiesTotal += floatval($gradeRecord->score);
+            }
+            // Always add max score, even if no grade record exists
+            $activitiesMax += floatval($activity->max_score);
+        }
+
+        // Calculate totals for quizzes
+        // Sum scores from grade records, but max scores from ALL quizzes (not just graded ones)
+        $quizzesTotal = 0;
+        $quizzesMax = 0;
+        
+        foreach ($activities->where('activity_category', 'quiz') as $quiz) {
+            $gradeRecord = $gradeRecords->firstWhere('activity_id', $quiz->id);
+            if ($gradeRecord && $gradeRecord->score !== null) {
+                $quizzesTotal += floatval($gradeRecord->score);
+            }
+            // Always add max score, even if no grade record exists
+            $quizzesMax += floatval($quiz->max_score);
+        }
+
+        // Use nursing calculator
+        $calculator = new \App\Services\NursingGradeCalculator();
+        
+        $activitiesScore = $calculator->calculateActivityScore($activitiesTotal, $activitiesMax);
+        $quizzesScore = $calculator->calculateQuizScore($quizzesTotal, $quizzesMax);
+
+        // Get existing term grade to preserve exam score
+        $existingTermGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
+            ->where('subject_id', $studentMapping->subject_id)
+            ->where('term', $term)
+            ->first();
+
+        $examScore = $existingTermGrade?->exam_score ?? 0;
+        $examMaxScore = $existingTermGrade?->exam_max_score ?? 100;
+        
+        $examGrade = $calculator->calculateExamScore($examScore, $examMaxScore);
+        $termGrade = $calculator->calculateTermGrade($activitiesScore, $quizzesScore, $examGrade);
+
+        // Update or create term grade record with computation_config
+        TermGrade::updateOrCreate(
+            [
+                'student_mapping_id' => $studentMapping->id,
+                'subject_id' => $studentMapping->subject_id,
+                'term' => $term,
+            ],
+            [
+                'exam_score' => $examScore,
+                'exam_max_score' => $examMaxScore,
+                'exam_grade' => round($examGrade, 2),
+                'term_grade' => round($termGrade, 2),
+                'computation_config' => [
+                    'activities_total' => $activitiesTotal,
+                    'activities_max' => $activitiesMax,
+                    'activities_score' => round($activitiesScore, 2),
+                    'quizzes_total' => $quizzesTotal,
+                    'quizzes_max' => $quizzesMax,
+                    'quizzes_score' => round($quizzesScore, 2),
+                    'exam_total' => $examScore,
+                    'exam_max' => $examMaxScore,
+                ],
+            ]
+        );
+
+        Log::info('Nursing term grade calculated', [
+            'student_mapping_id' => $studentMapping->id,
+            'term' => $term,
+            'activities_total' => $activitiesTotal,
+            'activities_max' => $activitiesMax,
+            'activities_score' => $activitiesScore,
+            'quizzes_total' => $quizzesTotal,
+            'quizzes_max' => $quizzesMax,
+            'quizzes_score' => $quizzesScore,
+            'exam_grade' => $examGrade,
+            'term_grade' => $termGrade,
+        ]);
     }
 
     /**
@@ -742,56 +1147,101 @@ class GradeController extends Controller
     /**
      * Export Activities + Exam scores to PDF
      */
-    public function exportActivities(Subject $subject)
+    public function exportActivities(Request $request, Subject $subject)
     {
-        $subject->load([
-            'activities' => function ($query) {
-                $query->orderBy('term')->orderBy('type')->orderBy('created_at');
-            },
-            'studentMappings' => function ($query) {
-                $query->orderBy('student_name');
-            }
-        ]);
+        try {
+            $subject->load([
+                'activities' => function ($query) {
+                    $query->orderBy('term')->orderBy('type')->orderBy('created_at');
+                },
+                'studentMappings' => function ($query) {
+                    $query->orderBy('student_name');
+                }
+            ]);
 
-        $activitiesByTerm = $subject->activities->groupBy('term');
-        
-        $gradeRecords = GradeRecord::whereHas('studentMapping', function ($query) use ($subject) {
-            $query->where('subject_id', $subject->id);
-        })->with(['studentMapping', 'activity'])->get();
+            $activitiesByTerm = $subject->activities->groupBy('term');
+            
+            $gradeRecords = GradeRecord::whereHas('studentMapping', function ($query) use ($subject) {
+                $query->where('subject_id', $subject->id);
+            })->with(['studentMapping', 'activity'])->get();
 
-        $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
-            $query->where('subject_id', $subject->id);
-        })->with('studentMapping')->get();
+            $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
+                $query->where('subject_id', $subject->id);
+            })->with('studentMapping')->get();
 
-        $pdf = \PDF::loadView('grades.exports.activities', compact('subject', 'activitiesByTerm', 'gradeRecords', 'termGrades'));
-        
-        return $pdf->download($subject->subject_code . '_Activities_Exam.pdf');
+            // Get dean name from request and faculty from auth
+            $deanName = $request->input('dean_name', '');
+            $faculty = Auth::guard('faculty')->user();
+            $adviserName = $faculty ? $faculty->name : '';
+
+            $pdf = \PDF::loadView('grades.exports.activities', compact('subject', 'activitiesByTerm', 'gradeRecords', 'termGrades', 'deanName', 'adviserName'));
+            
+            return $pdf->download($subject->subject_code . '_Activities_Exam.pdf');
+        } catch (\Exception $e) {
+            Log::error('Failed to export activities PDF', [
+                'subject_id' => $subject->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->with('error', 'Failed to export PDF: ' . $e->getMessage());
+        }
     }
 
     /**
      * Export Grade (PP) - Computed grades in percentage
      */
-    public function exportPP(Subject $subject)
+    public function exportPP(Request $request, Subject $subject)
     {
-        $subject->load([
-            'studentMappings' => function ($query) {
-                $query->orderBy('student_name');
-            }
-        ]);
+        try {
+            // Refresh subject to get latest data from database
+            $subject->refresh();
+            
+            $subject->load([
+                'studentMappings' => function ($query) {
+                    $query->orderBy('student_name');
+                }
+            ]);
 
-        $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
-            $query->where('subject_id', $subject->id);
-        })->with('studentMapping')->get();
+            $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
+                $query->where('subject_id', $subject->id);
+            })->with('studentMapping')->get();
 
-        $pdf = \PDF::loadView('grades.exports.pp', compact('subject', 'termGrades'));
-        
-        return $pdf->download($subject->subject_code . '_Grades_PP.pdf');
+            // Get dean name from request
+            $deanName = $request->input('dean_name', '');
+            
+            $faculty = Auth::guard('faculty')->user();
+            $adviserName = $faculty ? $faculty->name : '';
+
+            // Get matrix type from request (for dynamic matrix type) or use subject's stored type
+            $matrixType = $request->input('matrix_type', $subject->matrix_type);
+            
+            // Log the config for debugging
+            Log::info('Exporting PP PDF', [
+                'subject_id' => $subject->id,
+                'matrix_type_from_request' => $request->input('matrix_type'),
+                'subject_matrix_type' => $subject->matrix_type,
+                'using_matrix_type' => $matrixType,
+                'final_rating_config' => $subject->final_rating_config
+            ]);
+
+            // Pass matrix type to the view
+            $pdf = \PDF::loadView('grades.exports.pp', compact('subject', 'termGrades', 'deanName', 'adviserName', 'matrixType'));
+            
+            return $pdf->download($subject->subject_code . '_Grades_PP.pdf');
+        } catch (\Exception $e) {
+            Log::error('Failed to export PP PDF', [
+                'subject_id' => $subject->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->with('error', 'Failed to export PDF: ' . $e->getMessage());
+        }
     }
 
     /**
      * Export Term-Based Grading to PDF
      */
-    public function exportTerm(Subject $subject, string $term)
+    public function exportTerm(Request $request, Subject $subject, string $term)
     {
         $subject->load([
             'studentMappings' => function ($query) {
@@ -806,7 +1256,12 @@ class GradeController extends Controller
         ->with('studentMapping')
         ->get();
 
-        $pdf = \PDF::loadView('grades.exports.term', compact('subject', 'term', 'termGrades'));
+        // Get dean name from request and faculty from auth
+        $deanName = $request->input('dean_name', '');
+        $faculty = Auth::guard('faculty')->user();
+        $adviserName = $faculty ? $faculty->name : '';
+
+        $pdf = \PDF::loadView('grades.exports.term', compact('subject', 'term', 'termGrades', 'deanName', 'adviserName'));
         
         return $pdf->download($subject->subject_code . '_' . ucfirst($term) . '_Grades.pdf');
     }
@@ -841,26 +1296,10 @@ class GradeController extends Controller
                 ->where('term', $term)
                 ->first();
 
-            // Recalculate term grade if we have both class standing and exam score
-            if ($termGrade && $termGrade->class_standing !== null && $termGrade->exam_score !== null) {
-                $classWeight = $classStandingWeight / 100;
-                $examWeightDecimal = $examWeight / 100;
-
-                // Calculate exam percentage: (score / max_score) × 100
-                $examMaxScore = $termGrade->exam_max_score ?? 100;
-                $examPercentage = ($termGrade->exam_score / $examMaxScore) * 100;
-
-                // Calculate exam grade as weighted percentage
-                // Exam Grade = Percentage × Exam Weight %
-                $examGrade = $examPercentage * $examWeightDecimal;
-
-                // Calculate term grade (class standing + exam grade)
-                $termGradeValue = $termGrade->class_standing + $examGrade;
-
-                $termGrade->update([
-                    'exam_grade' => round($examGrade, 2),
-                    'term_grade' => round($termGradeValue, 2),
-                ]);
+            // Recalculate term grade using the calculateTermGrade method
+            // This ensures the correct formula (percentage or transmuted) is applied
+            if ($termGrade) {
+                $this->calculateTermGrade($termGrade, $subject->matrix_type);
             }
         }
     }

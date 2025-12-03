@@ -66,11 +66,11 @@
         </form>
     </div>
 
-    @if($activities->count() > 0)
-        @if($selectedSubject)
-            <!-- Enhanced Activity Manager Component -->
-            @include('activities._activity-manager', ['subject' => $selectedSubject])
-        @else
+    @if($selectedSubject)
+        <!-- Enhanced Activity Manager Component -->
+        @include('activities._activity-manager', ['subject' => $selectedSubject])
+    @elseif($activities->count() > 0)
+        @if(!$selectedSubject)
             <!-- All activities list view -->
             <div class="bg-white rounded-lg shadow-sm border">
                 <div class="px-6 py-4 border-b border-gray-200">
@@ -151,20 +151,11 @@
                 @if($subjectId || $type || $term)
                     No activities match your current filters. Try adjusting your search criteria.
                 @else
-                    You haven't created any activities yet. Select a subject and start adding activities.
+                    You haven't created any activities yet. Select a subject to get started.
                 @endif
             </p>
             @if($subjects->count() > 0)
-                <div class="flex justify-center space-x-4">
-                    @if(!$selectedSubject)
-                        <p class="text-gray-500">Select a subject above to create activities</p>
-                    @else
-                        <a href="{{ route('activities.create', ['subject_id' => $selectedSubject->id]) }}" 
-                           class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                            <i class="fas fa-plus mr-2"></i>Create Your First Activity
-                        </a>
-                    @endif
-                </div>
+                <p class="text-gray-500">Select a subject above to manage activities</p>
             @else
                 <p class="text-gray-500">You need to have subjects before you can create activities.</p>
                 <a href="{{ route('subjects.index') }}" 
