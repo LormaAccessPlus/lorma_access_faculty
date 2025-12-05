@@ -370,10 +370,16 @@ function syncStudents(subjectId) {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        if (data.success) {
+            alert(data.message || 'Students synced successfully!');
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to sync students');
+        }
     })
     .catch(error => {
-        alert('Failed to sync students');
+        console.error('Sync error:', error);
+        alert('Failed to sync students: ' + (error.message || 'Network error'));
     })
     .finally(() => {
         button.textContent = originalText;

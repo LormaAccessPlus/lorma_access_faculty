@@ -235,7 +235,24 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/subjects/{subject}/export/term/{term}', [App\Http\Controllers\GradeController::class, 'exportTerm'])->name('export.term');
     });
     
-    // Student Mapping Page
+    // Students Page (CSV Import + Auto-matching)
+    Route::prefix('students')->name('students.')->group(function () {
+        Route::get('/', [App\Http\Controllers\StudentController::class, 'index'])->name('index');
+        Route::post('/upload-csv', [App\Http\Controllers\StudentController::class, 'uploadCsv'])->name('upload-csv');
+    });
+    
+    // Dynamic Grading System
+    Route::prefix('grading')->name('grading.')->group(function () {
+        Route::get('/', [App\Http\Controllers\DynamicGradingController::class, 'index'])->name('index');
+        Route::post('/add-class', [App\Http\Controllers\DynamicGradingController::class, 'addClass'])->name('add-class');
+        Route::get('/{id}/configure', [App\Http\Controllers\DynamicGradingController::class, 'configure'])->name('configure');
+        Route::post('/{id}/save-configuration', [App\Http\Controllers\DynamicGradingController::class, 'saveConfiguration'])->name('save-configuration');
+        Route::get('/{id}/grade-sheet', [App\Http\Controllers\DynamicGradingController::class, 'gradeSheet'])->name('grade-sheet');
+        Route::post('/component/{componentId}/add-item', [App\Http\Controllers\DynamicGradingController::class, 'addComponentItem'])->name('add-component-item');
+        Route::post('/save-grade', [App\Http\Controllers\DynamicGradingController::class, 'saveGrade'])->name('save-grade');
+    });
+    
+    // Student Mapping Page (Legacy - keep for now)
     Route::get('/student-mapping', [StudentMappingPageController::class, 'index'])->name('student-mapping.index');
     
     // Grade Matrix Routes

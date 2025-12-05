@@ -78,14 +78,24 @@
                             </a>
                         </div>
                         
-                        <!-- Student Mapping -->
-                        <a href="{{ route('student-mapping.index') }}" 
-                           class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('student-mapping.*') || request()->routeIs('mappings.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
-                           style="{{ request()->routeIs('student-mapping.*') || request()->routeIs('mappings.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
+                        <!-- Students -->
+                        <a href="{{ route('students.index') }}" 
+                           class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('students.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
+                           style="{{ request()->routeIs('students.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
                            onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
                            onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
                             <i class="fas fa-users w-5 h-5 mr-3"></i>
-                            <span class="font-medium">Student Mapping</span>
+                            <span class="font-medium">Students</span>
+                        </a>
+                        
+                        <!-- Grading -->
+                        <a href="{{ route('grading.index') }}" 
+                           class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('grading.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
+                           style="{{ request()->routeIs('grading.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
+                           onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
+                           onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
+                            <i class="fas fa-calculator w-5 h-5 mr-3"></i>
+                            <span class="font-medium">Grading</span>
                         </a>
 
                         <!-- Grade Matrix with Dropdown -->

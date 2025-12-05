@@ -238,23 +238,55 @@ class ClassroomSyncController extends Controller
             DB::transaction(function () use ($subject, $gcrStudents, &$syncedCount, &$errors) {
                 foreach ($gcrStudents as $gcrStudent) {
                     try {
+                        // Debug log the student data structure
+                        Log::info('Processing GCR student', ['data' => $gcrStudent]);
+                        
+                        // Get student data with correct keys
+                        $userId = $gcrStudent['userId'] ?? $gcrStudent['user_id'] ?? null;
+                        
+                        // Handle name - could be array or string
+                        $studentName = 'Unknown';
+                        if (isset($gcrStudent['profile']['name'])) {
+                            $nameData = $gcrStudent['profile']['name'];
+                            if (is_array($nameData)) {
+                                $studentName = $nameData['fullName'] ?? $nameData['full_name'] ?? 'Unknown';
+                            } else {
+                                $studentName = $nameData;
+                            }
+                        }
+                        
+                        // Handle email
+                        $email = $gcrStudent['emailAddress'] ?? $gcrStudent['profile']['emailAddress'] ?? $gcrStudent['profile']['email_address'] ?? null;
+                        
+                        if (!$userId) {
+                            $errors[] = "Student missing user ID: " . $studentName;
+                            continue;
+                        }
+                        
                         // Check if mapping already exists
                         $existingMapping = StudentMapping::where('subject_id', $subject->id)
-                            ->where('gcr_student_id', $gcrStudent['user_id'])
+                            ->where('gcr_student_id', $userId)
                             ->first();
 
                         if (!$existingMapping) {
                             StudentMapping::create([
                                 'subject_id' => $subject->id,
-                                'gcr_student_id' => $gcrStudent['user_id'],
-                                'student_name' => $gcrStudent['profile']['name'],
-                                'student_email' => $gcrStudent['profile']['email_address'],
+                                'gcr_student_id' => $userId,
+                                'student_name' => $studentName,
+                                'student_email' => $email,
                                 'mapping_confidence' => 0.0 // Will be updated by matching algorithm
                             ]);
                             $syncedCount++;
+                            Log::info('Student synced successfully', ['name' => $studentName, 'user_id' => $userId]);
                         }
                     } catch (\Exception $e) {
-                        $errors[] = "Failed to sync student {$gcrStudent['profile']['name']}: " . $e->getMessage();
+                        $studentName = 'Unknown';
+                        if (isset($gcrStudent['profile']['name'])) {
+                            $nameData = $gcrStudent['profile']['name'];
+                            $studentName = is_array($nameData) ? ($nameData['fullName'] ?? 'Unknown') : $nameData;
+                        }
+                        Log::error('Failed to sync individual student', ['name' => $studentName, 'error' => $e->getMessage()]);
+                        $errors[] = "Failed to sync student {$studentName}: " . $e->getMessage();
                     }
                 }
             });
