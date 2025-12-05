@@ -16,6 +16,7 @@ class ComponentItem extends Model
         'item_name',
         'max_score',
         'date',
+        'activity_id',
     ];
 
     protected $casts = [
@@ -31,5 +32,10 @@ class ComponentItem extends Model
     public function grades(): HasMany
     {
         return $this->hasMany(StudentGrade::class, 'component_item_id');
+    }
+
+    public function activity(): BelongsTo
+    {
+        return $this->belongsTo(Activity::class, 'activity_id');
     }
 }

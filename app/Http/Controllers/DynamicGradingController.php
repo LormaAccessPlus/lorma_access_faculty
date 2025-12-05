@@ -8,6 +8,8 @@ use App\Models\GradingComponent;
 use App\Models\ComponentItem;
 use App\Models\StudentGrade;
 use App\Models\StudentMapping;
+use App\Models\Activity;
+use App\Services\GoogleClassroomService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -41,7 +43,6 @@ class DynamicGradingController extends Controller
     {
         $request->validate([
             'subject_id' => 'required|exists:subjects,id',
-            'term' => 'required|in:prelim,midterm,finals'
         ]);
 
         $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
@@ -49,26 +50,57 @@ class DynamicGradingController extends Controller
             ->where('faculty_id', $faculty->id)
             ->firstOrFail();
 
-        // Check if class already exists for this term
-        $existing = GradingClass::where('subject_id', $subject->id)
-            ->where('term', $request->term)
-            ->first();
+        // Check if class already exists for any term
+        $existing = GradingClass::where('subject_id', $subject->id)->first();
 
         if ($existing) {
-            return back()->with('error', 'This class already exists for the selected term.');
+            return back()->with('error', 'This class has already been added to grading.');
         }
 
-        $gradingClass = GradingClass::create([
-            'subject_id' => $subject->id,
-            'faculty_id' => $faculty->id,
-            'gcr_class_id' => $subject->gcr_class_id,
-            'class_name' => $subject->subject_name . ' - ' . $subject->section,
-            'term' => $request->term,
-            'term_formula' => null, // Will be set during configuration
-        ]);
+        // Create grading classes for all three terms
+        $terms = ['prelim', 'midterm', 'finals'];
+        $createdClasses = [];
 
-        return redirect()->route('grading.configure', $gradingClass->id)
-            ->with('success', 'Class added successfully. Configure your grading components.');
+        foreach ($terms as $term) {
+            $gradingClass = GradingClass::create([
+                'subject_id' => $subject->id,
+                'faculty_id' => $faculty->id,
+                'gcr_class_id' => $subject->gcr_class_id,
+                'class_name' => $subject->subject_name . ' - ' . $subject->section,
+                'term' => $term,
+                'term_formula' => null, // Will be set during configuration
+            ]);
+            
+            $createdClasses[] = $gradingClass;
+        }
+
+        // Redirect to the grade sheet for prelim term
+        return redirect()->route('grading.grade-sheet', $createdClasses[0]->id)
+            ->with('success', 'Class added successfully for all terms (Prelim, Midterm, Finals). Configure your grading components.');
+    }
+
+    public function show($subjectId)
+    {
+        $faculty = auth('faculty')->user();
+        
+        // Get all grading classes for this subject
+        $gradingClasses = GradingClass::where('subject_id', $subjectId)
+            ->where('faculty_id', $faculty->id)
+            ->with(['subject', 'components.items'])
+            ->get();
+
+        if ($gradingClasses->isEmpty()) {
+            return redirect()->route('grading.index')->with('error', 'No grading classes found for this subject.');
+        }
+
+        $subject = $gradingClasses->first()->subject;
+        
+        // Organize by term
+        $prelim = $gradingClasses->where('term', 'prelim')->first();
+        $midterm = $gradingClasses->where('term', 'midterm')->first();
+        $finals = $gradingClasses->where('term', 'finals')->first();
+
+        return view('grading.show', compact('subject', 'prelim', 'midterm', 'finals'));
     }
 
     public function configure($id)
@@ -106,19 +138,20 @@ class DynamicGradingController extends Controller
 
         DB::beginTransaction();
         try {
-            // Delete existing components
-            $gradingClass->components()->delete();
-
-            // Create new components
+            // Update existing components instead of deleting
             foreach ($request->components as $index => $component) {
-                GradingComponent::create([
-                    'grading_class_id' => $gradingClass->id,
-                    'component_name' => $component['name'],
-                    'component_type' => $component['type'],
-                    'weight_percentage' => $component['weight'],
-                    'formula' => $component['formula'] ?? null,
-                    'order' => $index,
-                ]);
+                GradingComponent::updateOrCreate(
+                    [
+                        'grading_class_id' => $gradingClass->id,
+                        'component_name' => $component['name'],
+                    ],
+                    [
+                        'component_type' => $component['type'],
+                        'weight_percentage' => $component['weight'],
+                        'formula' => $component['formula'] ?? null,
+                        'order' => $index,
+                    ]
+                );
             }
 
             // Save term formula
@@ -126,9 +159,58 @@ class DynamicGradingController extends Controller
                 'term_formula' => $request->term_formula ? ['formula' => $request->term_formula] : null,
             ]);
 
+            // Apply same configuration to other terms (Midterm and Finals)
+            $subject = $gradingClass->subject;
+            $otherTerms = ['midterm', 'finals'];
+            
+            foreach ($otherTerms as $term) {
+                if ($term === $gradingClass->term) continue;
+                
+                $otherGradingClass = GradingClass::firstOrCreate(
+                    [
+                        'subject_id' => $subject->id,
+                        'faculty_id' => $faculty->id,
+                        'term' => $term,
+                    ],
+                    [
+                        'term_formula' => $request->term_formula ? ['formula' => $request->term_formula] : null,
+                    ]
+                );
+                
+                // Copy components to other term
+                foreach ($request->components as $index => $component) {
+                    GradingComponent::updateOrCreate(
+                        [
+                            'grading_class_id' => $otherGradingClass->id,
+                            'component_name' => $component['name'],
+                        ],
+                        [
+                            'component_type' => $component['type'],
+                            'weight_percentage' => $component['weight'],
+                            'formula' => $component['formula'] ?? null,
+                            'order' => $index,
+                        ]
+                    );
+                }
+            }
+
+            // Recalculate all computed scores with new formulas
+            $grades = StudentGrade::where('grading_class_id', $gradingClass->id)->get();
+            foreach ($grades as $grade) {
+                $item = ComponentItem::find($grade->component_item_id);
+                if ($item && $item->component && $item->component->formula && $grade->score !== null) {
+                    $computedScore = $this->applyFormula(
+                        $grade->score,
+                        $item->max_score,
+                        $item->component->formula
+                    );
+                    $grade->update(['computed_score' => $computedScore]);
+                }
+            }
+
             DB::commit();
             return redirect()->route('grading.grade-sheet', $gradingClass->id)
-                ->with('success', 'Configuration saved successfully.');
+                ->with('success', 'Configuration saved for all terms and grades recalculated successfully.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -142,16 +224,30 @@ class DynamicGradingController extends Controller
         $faculty = auth('faculty')->user();
         $gradingClass = GradingClass::where('id', $id)
             ->where('faculty_id', $faculty->id)
-            ->with(['subject.studentMappings', 'components.items.grades'])
+            ->with(['subject.studentMappings', 'components.items.grades', 'components.items.activity'])
             ->firstOrFail();
+
+        // Get all terms for this subject
+        $subject = $gradingClass->subject;
+        $prelim = GradingClass::where('subject_id', $subject->id)
+            ->where('term', 'prelim')
+            ->with(['components.items.grades'])
+            ->first();
+        $midterm = GradingClass::where('subject_id', $subject->id)
+            ->where('term', 'midterm')
+            ->with(['components.items.grades'])
+            ->first();
+        $finals = GradingClass::where('subject_id', $subject->id)
+            ->where('term', 'finals')
+            ->with(['components.items.grades'])
+            ->first();
 
         // Get students for this class
         $students = StudentMapping::where('subject_id', $gradingClass->subject_id)
-            ->where('auto_matched', true)
             ->orderBy('student_name')
             ->get();
 
-        return view('grading.grade-sheet', compact('gradingClass', 'students'));
+        return view('grading.grade-sheet', compact('gradingClass', 'students', 'subject', 'prelim', 'midterm', 'finals'));
     }
 
     public function addComponentItem(Request $request, $componentId)
@@ -219,9 +315,37 @@ class DynamicGradingController extends Controller
             ]
         );
 
+        // Calculate component totals and term grade for this student
+        $componentTotals = [];
+        $termGrade = 0;
+        
+        foreach ($gradingClass->components as $comp) {
+            $grades = StudentGrade::where('student_mapping_id', $request->student_mapping_id)
+                ->whereIn('component_item_id', $comp->items->pluck('id'))
+                ->get();
+            
+            $total = 0;
+            $count = 0;
+            foreach ($grades as $grade) {
+                if ($grade->computed_score !== null) {
+                    $total += $grade->computed_score;
+                    $count++;
+                }
+            }
+            
+            $avg = $count > 0 ? $total / $count : null;
+            $componentTotals[$comp->id] = $avg;
+            
+            if ($avg !== null) {
+                $termGrade += $avg * ($comp->weight_percentage / 100);
+            }
+        }
+        
         return response()->json([
             'success' => true,
             'computed_score' => $computedScore,
+            'component_totals' => $componentTotals,
+            'term_grade' => round($termGrade, 2),
         ]);
     }
 
@@ -240,4 +364,80 @@ class DynamicGradingController extends Controller
             return null;
         }
     }
+
+    public function fetchScoresFromGCR($id)
+    {
+        try {
+            $faculty = auth('faculty')->user();
+            $gradingClass = GradingClass::where('id', $id)->where('faculty_id', $faculty->id)->firstOrFail();
+            $subject = $gradingClass->subject;
+
+            if (!$subject->gcr_class_id) {
+                return response()->json(['success' => false, 'message' => 'Subject not connected to Google Classroom']);
+            }
+
+            $classroomService = app(GoogleClassroomService::class);
+            if (!$classroomService->authenticateWithFaculty($faculty)) {
+                return response()->json(['success' => false, 'message' => 'Failed to authenticate with Google Classroom']);
+            }
+
+            $importedCount = 0;
+            $skippedNoActivityId = 0;
+            $skippedNoGcrId = 0;
+            
+            foreach ($gradingClass->components as $component) {
+                foreach ($component->items as $item) {
+                    if (!$item->activity_id) {
+                        $skippedNoActivityId++;
+                        continue;
+                    }
+                    
+                    $activity = Activity::find($item->activity_id);
+                    if (!$activity || !$activity->gcr_assignment_id) {
+                        $skippedNoGcrId++;
+                        continue;
+                    }
+
+                    Log::info('Fetching submissions', ['activity' => $activity->name, 'gcr_id' => $activity->gcr_assignment_id]);
+                    $submissions = $classroomService->getStudentSubmissions($subject->gcr_class_id, $activity->gcr_assignment_id);
+                    Log::info('Got submissions', ['count' => count($submissions)]);
+                    
+                    foreach ($submissions as $submission) {
+                        $gcrUserId = $submission['userId'] ?? $submission['user_id'] ?? null;
+                        $score = $submission['assignedGrade'] ?? $submission['assigned_grade'] ?? null;
+                        
+                        Log::info('Processing submission', ['user_id' => $gcrUserId, 'score' => $score]);
+                        
+                        if (!$gcrUserId || $score === null) continue;
+
+                        $studentMapping = StudentMapping::where('subject_id', $subject->id)->where('gcr_student_id', $gcrUserId)->first();
+                        if (!$studentMapping) {
+                            Log::warning('Student mapping not found', ['gcr_user_id' => $gcrUserId]);
+                            continue;
+                        }
+
+                        $computedScore = ($score / $activity->max_score) * 100;
+                        
+                        StudentGrade::updateOrCreate(
+                            ['component_item_id' => $item->id, 'student_mapping_id' => $studentMapping->id],
+                            [
+                                'grading_class_id' => $gradingClass->id,
+                                'score' => $score, 
+                                'computed_score' => $computedScore
+                            ]
+                        );
+                        $importedCount++;
+                    }
+                }
+            }
+            
+            Log::info('Fetch complete', ['imported' => $importedCount, 'skipped_no_activity_id' => $skippedNoActivityId, 'skipped_no_gcr_id' => $skippedNoGcrId]);
+
+            return response()->json(['success' => true, 'message' => "Imported {$importedCount} scores from Google Classroom"]);
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch scores from GCR', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
 }

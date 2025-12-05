@@ -138,15 +138,97 @@ class ClassroomSyncController extends Controller
             $courses = $this->classroomService->getCourses();
             $course = collect($courses)->firstWhere('id', $request->gcr_class_id);
 
-            // Update subject with GCR class ID and course state
+            // Update subject with GCR class ID, course name, and course state
             $subject->update([
                 'gcr_class_id' => $request->gcr_class_id,
+                'gcr_class_name' => $course['name'] ?? null,
                 'gcr_course_state' => $course['course_state'] ?? 'ACTIVE'
             ]);
 
+            // Automatically fetch and sync students from Google Classroom
+            try {
+                $students = $this->classroomService->getStudents($request->gcr_class_id);
+                $syncedCount = 0;
+                $matchedCount = 0;
+
+                // Get existing students for this subject
+                $existingMappings = StudentMapping::where('subject_id', $subject->id)->get();
+
+                foreach ($students as $student) {
+                    $gcrName = $student['profile']['name']['fullName'] ?? '';
+                    $gcrEmail = $student['profile']['emailAddress'] ?? '';
+                    $gcrUserId = $student['userId'];
+
+                    // Check if this GCR student already exists
+                    $existingByGcrId = $existingMappings->firstWhere('gcr_student_id', $gcrUserId);
+                    if ($existingByGcrId) {
+                        // Already exists, skip
+                        continue;
+                    }
+
+                    // Try to match with existing CSV students (those without GCR ID)
+                    $matched = false;
+                    $bestMatch = null;
+                    $bestConfidence = 0;
+
+                    foreach ($existingMappings as $existing) {
+                        // Skip if already has a GCR ID
+                        if ($existing->gcr_student_id) {
+                            continue;
+                        }
+
+                        // Check email match (highest priority)
+                        if ($existing->student_email && $gcrEmail && 
+                            strtolower($existing->student_email) === strtolower($gcrEmail)) {
+                            $bestMatch = $existing;
+                            $bestConfidence = 100;
+                            break; // Perfect match, stop searching
+                        }
+                        
+                        // Check name similarity
+                        $similarity = $this->calculateNameSimilarity($existing->student_name, $gcrName);
+                        if ($similarity >= 80 && $similarity > $bestConfidence) {
+                            $bestMatch = $existing;
+                            $bestConfidence = $similarity;
+                        }
+                    }
+
+                    // If we found a match, update it
+                    if ($bestMatch && $bestConfidence >= 80) {
+                        $bestMatch->update([
+                            'gcr_student_id' => $gcrUserId,
+                            'student_email' => $gcrEmail, // Update email from GCR if not present
+                            'auto_matched' => true,
+                            'mapping_confidence' => $bestConfidence,
+                        ]);
+                        $matched = true;
+                        $matchedCount++;
+                    } else {
+                        // No match found, create new mapping for GCR student
+                        StudentMapping::create([
+                            'subject_id' => $subject->id,
+                            'student_name' => $gcrName,
+                            'student_email' => $gcrEmail,
+                            'gcr_student_id' => $gcrUserId,
+                            'auto_matched' => true,
+                            'mapping_confidence' => 100,
+                        ]);
+                    }
+                    $syncedCount++;
+                }
+
+                Log::info("Auto-synced {$syncedCount} GCR students, matched {$matchedCount} with existing CSV students for subject {$subject->id}");
+            } catch (\Exception $e) {
+                Log::warning('Failed to auto-sync students after connecting subject', [
+                    'subject_id' => $subject->id,
+                    'error' => $e->getMessage()
+                ]);
+                // Don't fail the connection if student sync fails
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Subject successfully connected to Google Classroom course.',
+                'message' => 'Subject successfully connected to Google Classroom course and students synced.',
                 'course_state' => $course['course_state'] ?? 'ACTIVE'
             ]);
 
@@ -647,6 +729,10 @@ class ClassroomSyncController extends Controller
                                 'activity_category' => $activityCategory,
                                 'gcr_assignment_id' => $assignment['id']
                             ]);
+                            
+                            // Sync to grading sheet
+                            $this->syncActivityToGradingItem($activity);
+                            
                             $importedCount++;
                         } else {
                             $activity = $existingActivity;
@@ -789,5 +875,70 @@ class ClassroomSyncController extends Controller
                 'class_standing' => round($classStanding, 2),
             ]
         );
+    }
+
+    /**
+     * Calculate name similarity for matching
+     */
+    private function calculateNameSimilarity($name1, $name2)
+    {
+        $name1 = strtolower(trim($name1));
+        $name2 = strtolower(trim($name2));
+
+        // Exact match
+        if ($name1 === $name2) {
+            return 100;
+        }
+
+        // Remove common suffixes/prefixes
+        $name1 = preg_replace('/\b(jr|sr|ii|iii|iv)\b\.?/i', '', $name1);
+        $name2 = preg_replace('/\b(jr|sr|ii|iii|iv)\b\.?/i', '', $name2);
+
+        // Split into parts
+        $parts1 = preg_split('/\s+/', trim($name1));
+        $parts2 = preg_split('/\s+/', trim($name2));
+
+        // Check if all parts of shorter name are in longer name
+        $shorter = count($parts1) < count($parts2) ? $parts1 : $parts2;
+        $longer = count($parts1) >= count($parts2) ? $parts2 : $parts1;
+
+        $matchCount = 0;
+        foreach ($shorter as $part) {
+            foreach ($longer as $longPart) {
+                similar_text($part, $longPart, $percent);
+                if ($percent > 85) {
+                    $matchCount++;
+                    break;
+                }
+            }
+        }
+
+        return ($matchCount / count($shorter)) * 100;
+    }
+
+    private function syncActivityToGradingItem($activity)
+    {
+        $gradingClass = \App\Models\GradingClass::where('subject_id', $activity->subject_id)
+            ->where('term', $activity->term)
+            ->first();
+
+        if (!$gradingClass) return;
+
+        $componentName = match($activity->activity_category) {
+            'quiz' => 'Quizzes',
+            'activity' => 'Activities',
+            default => 'Activities'
+        };
+
+        $component = $gradingClass->components()->where('component_name', $componentName)->first();
+        if (!$component) return;
+
+        \App\Models\ComponentItem::create([
+            'component_id' => $component->id,
+            'item_name' => $activity->name,
+            'max_score' => $activity->max_score,
+            'date' => now(),
+            'activity_id' => $activity->id
+        ]);
     }
 }

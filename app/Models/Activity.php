@@ -27,6 +27,14 @@ class Activity extends Model
         'weight' => 'decimal:2',
     ];
 
+    protected static function booted()
+    {
+        static::deleting(function ($activity) {
+            // Delete linked component items
+            ComponentItem::where('activity_id', $activity->id)->delete();
+        });
+    }
+
     public function subject(): BelongsTo
     {
         return $this->belongsTo(Subject::class);

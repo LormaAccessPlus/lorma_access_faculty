@@ -122,6 +122,9 @@ class ActivityController extends Controller
 
         $activity = Activity::create($validated);
 
+        // Automatically create grading item in the corresponding component
+        $this->syncActivityToGradingItem($activity);
+
         return response()->json([
             'message' => 'Activity created successfully',
             'activity' => $activity->load('subject')
@@ -179,6 +182,9 @@ class ActivityController extends Controller
         ]);
 
         $activity->update($validated);
+
+        // Update corresponding grading item if it exists
+        $this->updateGradingItem($activity);
 
         return response()->json([
             'message' => 'Activity updated successfully',
@@ -283,5 +289,67 @@ class ActivityController extends Controller
             'message' => count($createdActivities) . ' activities created successfully',
             'activities' => $createdActivities
         ], 201);
+    }
+
+    /**
+     * Sync activity to grading item
+     */
+    private function syncActivityToGradingItem(Activity $activity)
+    {
+        \Log::info('Syncing activity to grading item', ['activity_id' => $activity->id, 'name' => $activity->name]);
+        
+        // Find the grading class for this subject and term
+        $gradingClass = \App\Models\GradingClass::where('subject_id', $activity->subject_id)
+            ->where('term', $activity->term)
+            ->first();
+
+        if (!$gradingClass) {
+            \Log::warning('No grading class found', ['subject_id' => $activity->subject_id, 'term' => $activity->term]);
+            return;
+        }
+
+        // Map activity category to component name
+        $componentName = match($activity->activity_category) {
+            'quiz' => 'Quizzes',
+            'activity' => 'Activities',
+            default => 'Activities'
+        };
+
+        // Find the component
+        $component = $gradingClass->components()
+            ->where('component_name', $componentName)
+            ->first();
+
+        if (!$component) {
+            \Log::warning('No component found', ['component_name' => $componentName]);
+            return;
+        }
+
+        // Create the grading item
+        $item = \App\Models\ComponentItem::create([
+            'component_id' => $component->id,
+            'item_name' => $activity->name,
+            'max_score' => $activity->max_score,
+            'date' => now(),
+            'activity_id' => $activity->id
+        ]);
+        
+        \Log::info('Created component item', ['item_id' => $item->id, 'activity_id' => $item->activity_id]);
+    }
+
+    /**
+     * Update grading item when activity is updated
+     */
+    private function updateGradingItem(Activity $activity)
+    {
+        // Find grading item linked to this activity
+        $gradingItem = \App\Models\ComponentItem::where('activity_id', $activity->id)->first();
+
+        if ($gradingItem) {
+            $gradingItem->update([
+                'item_name' => $activity->name,
+                'max_score' => $activity->max_score,
+            ]);
+        }
     }
 }

@@ -37,14 +37,27 @@
                         @foreach($connectedSubjects as $subject)
                             <div class="border border-gray-200 rounded-lg p-4">
                                 <div class="flex justify-between items-start">
-                                    <div>
+                                    <div class="flex-1">
                                         <h3 class="font-semibold text-gray-900">{{ $subject->subject_code }}</h3>
                                         <p class="text-gray-600">{{ $subject->subject_name }}</p>
                                         <p class="text-sm text-gray-500">Section: {{ $subject->section }}</p>
-                                        <p class="text-sm text-green-600 mt-2">
-                                            <i class="fas fa-check-circle mr-1"></i>
-                                            Connected to Google Classroom
-                                        </p>
+                                        <div class="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                            <p class="text-sm text-green-800 font-medium mb-1">
+                                                <i class="fas fa-link mr-1"></i>
+                                                Connected to Google Classroom
+                                            </p>
+                                            @if($subject->gcr_class_name)
+                                                <p class="text-sm text-green-700">
+                                                    <i class="fas fa-google mr-1"></i>
+                                                    <span class="font-medium">GCR Name:</span> <span class="font-semibold">{{ $subject->gcr_class_name }}</span>
+                                                </p>
+                                            @else
+                                                <p class="text-xs text-green-700">
+                                                    <i class="fas fa-google mr-1"></i>
+                                                    Course ID: <span class="font-mono">{{ $subject->gcr_class_id }}</span>
+                                                </p>
+                                            @endif
+                                        </div>
                                     </div>
                                     <div class="flex space-x-2">
                                         <button onclick="syncStudents({{ $subject->id }})" 

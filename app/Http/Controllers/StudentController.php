@@ -4,12 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\Subject;
 use App\Models\StudentMapping;
+use App\Services\GoogleClassroomService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class StudentController extends Controller
 {
+    protected $classroomService;
+
+    public function __construct(GoogleClassroomService $classroomService)
+    {
+        $this->classroomService = $classroomService;
+    }
+
     public function index(Request $request)
     {
         $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
@@ -27,6 +35,73 @@ class StudentController extends Controller
             ->get();
 
         return view('students.index', compact('subjects'));
+    }
+
+    public function fetchFromGcr(Request $request)
+    {
+        $request->validate([
+            'subject_id' => 'required|exists:subjects,id'
+        ]);
+
+        $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
+        $subject = Subject::where('id', $request->subject_id)
+            ->where('faculty_id', $faculty->id)
+            ->firstOrFail();
+
+        if (!$subject->gcr_class_id) {
+            return back()->with('error', 'This subject is not connected to Google Classroom.');
+        }
+
+        try {
+            // Get GCR students
+            $gcrStudents = $this->getGcrStudents($subject);
+            
+            if (empty($gcrStudents)) {
+                return back()->with('error', 'No students found in Google Classroom. Please ensure you are logged in with Google and the classroom has students enrolled.');
+            }
+
+            $imported = 0;
+            $updated = 0;
+
+            foreach ($gcrStudents as $gcrStudent) {
+                $existing = StudentMapping::where('subject_id', $subject->id)
+                    ->where('gcr_student_id', $gcrStudent['id'])
+                    ->first();
+
+                if ($existing) {
+                    // Update existing mapping
+                    $existing->update([
+                        'student_name' => $gcrStudent['name'],
+                        'student_email' => $gcrStudent['email'],
+                        'auto_matched' => true,
+                        'mapping_confidence' => 100,
+                    ]);
+                    $updated++;
+                } else {
+                    // Create new mapping
+                    StudentMapping::create([
+                        'subject_id' => $subject->id,
+                        'student_name' => $gcrStudent['name'],
+                        'student_email' => $gcrStudent['email'],
+                        'gcr_student_id' => $gcrStudent['id'],
+                        'auto_matched' => true,
+                        'mapping_confidence' => 100,
+                    ]);
+                    $imported++;
+                }
+            }
+
+            $message = "Fetched from Google Classroom: {$imported} new students imported";
+            if ($updated > 0) {
+                $message .= ", {$updated} students updated";
+            }
+
+            return back()->with('success', $message);
+
+        } catch (\Exception $e) {
+            Log::error('GCR Fetch Error: ' . $e->getMessage());
+            return back()->with('error', 'Error fetching from Google Classroom: ' . $e->getMessage());
+        }
     }
 
     public function uploadCsv(Request $request)
@@ -116,24 +191,24 @@ class StudentController extends Controller
 
         try {
             $faculty = $subject->faculty;
-            $accessToken = $faculty->google_access_token;
 
-            if (!$accessToken) {
+            // Authenticate with Google Classroom
+            if (!$this->classroomService->authenticateWithFaculty($faculty)) {
+                Log::error('Failed to authenticate with Google Classroom for faculty: ' . $faculty->id);
                 return [];
             }
 
-            $response = \Http::withToken($accessToken)
-                ->get("https://classroom.googleapis.com/v1/courses/{$subject->gcr_class_id}/students");
+            // Fetch students from Google Classroom
+            $students = $this->classroomService->getStudents($subject->gcr_class_id);
 
-            if ($response->successful()) {
-                return collect($response->json('students', []))->map(function ($student) {
-                    return [
-                        'id' => $student['userId'],
-                        'name' => $student['profile']['name']['fullName'] ?? '',
-                        'email' => $student['profile']['emailAddress'] ?? '',
-                    ];
-                })->toArray();
-            }
+            return collect($students)->map(function ($student) {
+                return [
+                    'id' => $student['userId'] ?? '',
+                    'name' => $student['profile']['name']['fullName'] ?? $student['fullName'] ?? $student['name'] ?? '',
+                    'email' => $student['profile']['emailAddress'] ?? $student['emailAddress'] ?? $student['email'] ?? '',
+                ];
+            })->toArray();
+
         } catch (\Exception $e) {
             Log::error('Error fetching GCR students: ' . $e->getMessage());
         }

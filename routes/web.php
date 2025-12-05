@@ -245,11 +245,13 @@ Route::middleware(['auth.faculty'])->group(function () {
     Route::prefix('grading')->name('grading.')->group(function () {
         Route::get('/', [App\Http\Controllers\DynamicGradingController::class, 'index'])->name('index');
         Route::post('/add-class', [App\Http\Controllers\DynamicGradingController::class, 'addClass'])->name('add-class');
+        Route::get('/subject/{subjectId}', [App\Http\Controllers\DynamicGradingController::class, 'show'])->name('show');
         Route::get('/{id}/configure', [App\Http\Controllers\DynamicGradingController::class, 'configure'])->name('configure');
         Route::post('/{id}/save-configuration', [App\Http\Controllers\DynamicGradingController::class, 'saveConfiguration'])->name('save-configuration');
         Route::get('/{id}/grade-sheet', [App\Http\Controllers\DynamicGradingController::class, 'gradeSheet'])->name('grade-sheet');
         Route::post('/component/{componentId}/add-item', [App\Http\Controllers\DynamicGradingController::class, 'addComponentItem'])->name('add-component-item');
         Route::post('/save-grade', [App\Http\Controllers\DynamicGradingController::class, 'saveGrade'])->name('save-grade');
+        Route::post('/{id}/fetch-scores', [App\Http\Controllers\DynamicGradingController::class, 'fetchScoresFromGCR'])->name('fetch-scores');
     });
     
     // Student Mapping Page (Legacy - keep for now)
