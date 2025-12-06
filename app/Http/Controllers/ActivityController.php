@@ -308,20 +308,42 @@ class ActivityController extends Controller
             return;
         }
 
-        // Map activity category to component name
-        $componentName = match($activity->activity_category) {
-            'quiz' => 'Quizzes',
-            'activity' => 'Activities',
-            default => 'Activities'
-        };
-
-        // Find the component
+        // First, check if there's a "Class Standing" component (which combines activities and quizzes)
         $component = $gradingClass->components()
-            ->where('component_name', $componentName)
+            ->where('component_type', 'class_standing')
             ->first();
 
+        // If no Class Standing component, look for specific component by name
         if (!$component) {
-            \Log::warning('No component found', ['component_name' => $componentName]);
+            // Map activity category to component name
+            $componentName = match($activity->activity_category) {
+                'quiz' => 'Quizzes',
+                'activity' => 'Activities',
+                default => 'Activities'
+            };
+
+            // Find the component by name
+            $component = $gradingClass->components()
+                ->where('component_name', $componentName)
+                ->first();
+        }
+
+        if (!$component) {
+            \Log::warning('No component found', [
+                'subject_id' => $activity->subject_id, 
+                'term' => $activity->term,
+                'activity_category' => $activity->activity_category
+            ]);
+            return;
+        }
+
+        // Check if already linked to avoid duplicates
+        $existingItem = \App\Models\ComponentItem::where('component_id', $component->id)
+            ->where('activity_id', $activity->id)
+            ->first();
+
+        if ($existingItem) {
+            \Log::info('Activity already linked to component', ['activity_id' => $activity->id, 'component_id' => $component->id]);
             return;
         }
 
@@ -334,7 +356,7 @@ class ActivityController extends Controller
             'activity_id' => $activity->id
         ]);
         
-        \Log::info('Created component item', ['item_id' => $item->id, 'activity_id' => $item->activity_id]);
+        \Log::info('Created component item', ['item_id' => $item->id, 'activity_id' => $item->activity_id, 'component_type' => $component->component_type]);
     }
 
     /**

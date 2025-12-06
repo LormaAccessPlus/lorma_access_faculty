@@ -47,8 +47,9 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Type</label>
-                        <span class="mt-1 inline-flex px-2 py-1 text-xs rounded-full {{ $subject->type === 'lecture_lab' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800' }}">
-                            {{ $subject->type === 'lecture_lab' ? 'Lecture + Laboratory' : 'Lecture Only' }}
+                        <span class="mt-1 inline-flex px-2 py-1 text-xs rounded-full 
+                            {{ $subject->type === 'lecture_lab' ? 'bg-purple-100 text-purple-800' : ($subject->type === 'lab_only' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800') }}">
+                            {{ $subject->type === 'lecture_lab' ? 'Lecture + Laboratory' : ($subject->type === 'lab_only' ? 'Lab Only' : 'Lecture Only') }}
                         </span>
                     </div>
                     <div>

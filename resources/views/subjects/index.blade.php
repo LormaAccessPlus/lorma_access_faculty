@@ -42,8 +42,9 @@
                         <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition duration-200">
                             <div class="flex justify-between items-start mb-2">
                                 <h3 class="font-semibold text-lg text-gray-900">{{ $subject->subject_code }}</h3>
-                                <span class="px-2 py-1 text-xs rounded-full {{ $subject->type === 'lecture_lab' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800' }}">
-                                    {{ $subject->type === 'lecture_lab' ? 'Lec + Lab' : 'Lecture Only' }}
+                                <span class="px-2 py-1 text-xs rounded-full 
+                                    {{ $subject->type === 'lecture_lab' ? 'bg-purple-100 text-purple-800' : ($subject->type === 'lab_only' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800') }}">
+                                    {{ $subject->type === 'lecture_lab' ? 'Lec + Lab' : ($subject->type === 'lab_only' ? 'Lab Only' : 'Lecture Only') }}
                                 </span>
                             </div>
                             <p class="text-gray-700 mb-2">{{ $subject->subject_name }}</p>
@@ -107,8 +108,9 @@
                                             <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
                                                 <div class="flex justify-between items-start mb-1">
                                                     <h5 class="font-medium text-gray-900">{{ $subject->subject_code }}</h5>
-                                                    <span class="px-2 py-1 text-xs rounded-full {{ $subject->type === 'lecture_lab' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800' }}">
-                                                        {{ $subject->type === 'lecture_lab' ? 'Lec + Lab' : 'Lecture Only' }}
+                                                    <span class="px-2 py-1 text-xs rounded-full 
+                                                        {{ $subject->type === 'lecture_lab' ? 'bg-purple-100 text-purple-800' : ($subject->type === 'lab_only' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800') }}">
+                                                        {{ $subject->type === 'lecture_lab' ? 'Lec + Lab' : ($subject->type === 'lab_only' ? 'Lab Only' : 'Lecture Only') }}
                                                     </span>
                                                 </div>
                                                 <p class="text-sm text-gray-700 mb-1">{{ $subject->subject_name }}</p>

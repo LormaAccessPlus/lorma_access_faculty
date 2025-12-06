@@ -119,7 +119,7 @@
     @forelse($subjects as $subject)
         @php
             $studentCount = $subject->studentMappings->count();
-            $matchedCount = $subject->studentMappings->where('auto_matched', true)->count();
+            $matchedCount = $subject->studentMappings->whereNotNull('gcr_student_id')->count();
             $matchPercentage = $studentCount > 0 ? round(($matchedCount / $studentCount) * 100) : 0;
         @endphp
         <div class="subject-card bg-white rounded-lg shadow-sm hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1" 
@@ -149,18 +149,16 @@
                 </div>
                 
                 <!-- Progress Bar -->
-                @if($studentCount > 0)
-                    <div class="mb-4">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs text-gray-600">Match Progress</span>
-                            <span class="text-xs font-semibold text-gray-900">{{ $matchedCount }}/{{ $studentCount }}</span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="h-2 rounded-full {{ $matchPercentage == 100 ? 'bg-green-500' : 'bg-yellow-500' }}" 
-                                 style="width: {{ $matchPercentage }}%"></div>
-                        </div>
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs text-gray-600">Match Progress</span>
+                        <span class="text-xs font-semibold text-gray-900">{{ $matchedCount }}/{{ $studentCount }}</span>
                     </div>
-                @endif
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full {{ $matchPercentage == 100 ? 'bg-green-500' : ($studentCount > 0 ? 'bg-yellow-500' : 'bg-gray-300') }}" 
+                             style="width: {{ $matchPercentage }}%"></div>
+                    </div>
+                </div>
                 
                 <!-- Stats -->
                 <div class="flex gap-2 mb-4">
@@ -184,17 +182,11 @@
 
                 <!-- Actions -->
                 <div class="flex gap-2">
-                    @if($subject->gcr_class_id)
-                        <button type="button" 
-                                onclick="syncStudentsFromGCR{{ $subject->id }}()"
-                                class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                            <i class="fas fa-sync mr-2"></i> Sync Students from GCR
-                        </button>
-                    @else
-                        <div class="flex-1 text-sm text-gray-500 italic">
-                            Connect to Google Classroom to sync students
-                        </div>
-                    @endif
+                    <button type="button" 
+                            onclick="openImportModalForSubject({{ $subject->id }})"
+                            class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                        <i class="fas fa-file-upload mr-2"></i> Import CSV
+                    </button>
 
                     @if($studentCount > 0)
                         <button type="button"
@@ -207,36 +199,7 @@
             </div>
         </div>
 
-        <script>
-            function syncStudentsFromGCR{{ $subject->id }}() {
-                if (!confirm('Sync students from Google Classroom? This will fetch all students from the connected course.')) {
-                    return;
-                }
 
-                fetch('{{ route('classroom.sync-students') }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        subject_id: {{ $subject->id }}
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        location.reload();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    alert('Error syncing students: ' + error);
-                });
-            }
-        </script>
 
         <!-- View Students Modal -->
         @if($studentCount > 0)
@@ -507,6 +470,169 @@ document.addEventListener('DOMContentLoaded', function() {
     searchInput.addEventListener('input', filterAndSort);
     filterStatus.addEventListener('change', filterAndSort);
     sortBy.addEventListener('change', filterAndSort);
+});
+</script>
+
+<!-- CSV Import Modal -->
+<div id="importModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeImportModal()"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+            <form id="csvImportForm" enctype="multipart/form-data">
+                @csrf
+                <div class="bg-green-600 px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-white">
+                                <i class="fas fa-file-upload mr-2"></i>Import Students from CSV
+                            </h3>
+                            <p class="text-sm text-green-100">Upload a CSV file to import and auto-match students with Google Classroom</p>
+                        </div>
+                        <button type="button" onclick="closeImportModal()" class="text-white hover:text-gray-200">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-white px-6 py-4">
+                    <!-- Subject Selection -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-book mr-1"></i>Select Subject
+                        </label>
+                        <select name="subject_id" id="importSubjectId" required
+                                class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                            <option value="">-- Choose a subject --</option>
+                            @foreach($subjects as $subject)
+                                <option value="{{ $subject->id }}">
+                                    {{ $subject->subject_code }} - {{ $subject->subject_name }} ({{ $subject->section }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- CSV File Upload -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-file-csv mr-1"></i>CSV File
+                        </label>
+                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-green-400 transition-colors">
+                            <div class="space-y-1 text-center">
+                                <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                                <div class="flex text-sm text-gray-600">
+                                    <label for="csv-file-upload" class="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-green-500">
+                                        <span>Upload a file</span>
+                                        <input id="csv-file-upload" name="csv_file" type="file" accept=".csv,.txt" required class="sr-only" onchange="updateFileName(this)">
+                                    </label>
+                                    <p class="pl-1">or drag and drop</p>
+                                </div>
+                                <p class="text-xs text-gray-500">CSV file up to 10MB</p>
+                                <p id="selected-file-name" class="text-sm font-medium text-green-600 mt-2"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CSV Format Info -->
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <h4 class="text-sm font-semibold text-blue-900 mb-2">
+                            <i class="fas fa-info-circle mr-1"></i>CSV Format Requirements
+                        </h4>
+                        <ul class="text-sm text-blue-800 space-y-1">
+                            <li><i class="fas fa-check text-green-600 mr-1"></i>Required columns: <code class="bg-blue-100 px-1 rounded">name</code> or <code class="bg-blue-100 px-1 rounded">student_name</code></li>
+                            <li><i class="fas fa-check text-green-600 mr-1"></i>Optional columns: <code class="bg-blue-100 px-1 rounded">email</code> or <code class="bg-blue-100 px-1 rounded">student_email</code></li>
+                            <li><i class="fas fa-check text-green-600 mr-1"></i>First row should contain column headers</li>
+                            <li><i class="fas fa-check text-green-600 mr-1"></i>System will auto-match students with Google Classroom roster</li>
+                        </ul>
+                    </div>
+
+                    <!-- Sample CSV -->
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <h4 class="text-sm font-semibold text-gray-900 mb-2">
+                            <i class="fas fa-file-alt mr-1"></i>Sample CSV Format
+                        </h4>
+                        <pre class="text-xs bg-white p-3 rounded border border-gray-200 overflow-x-auto"><code>name,email
+Juan Dela Cruz,juan.delacruz@student.lorma.edu
+Maria Santos,maria.santos@student.lorma.edu
+Pedro Reyes,pedro.reyes@student.lorma.edu</code></pre>
+                        <a href="/sample_students.csv" download class="inline-flex items-center mt-2 text-sm text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-download mr-1"></i>Download sample CSV
+                        </a>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 px-6 py-4 flex justify-end gap-3">
+                    <button type="button" onclick="closeImportModal()" 
+                            class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                        <i class="fas fa-times mr-1"></i> Cancel
+                    </button>
+                    <button type="submit" id="importBtn"
+                            class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                        <i class="fas fa-upload mr-1"></i> Import & Auto-Match
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openImportModal() {
+    document.getElementById('importModal').classList.remove('hidden');
+}
+
+function openImportModalForSubject(subjectId) {
+    document.getElementById('importModal').classList.remove('hidden');
+    document.getElementById('importSubjectId').value = subjectId;
+}
+
+function closeImportModal() {
+    document.getElementById('importModal').classList.add('hidden');
+    document.getElementById('csvImportForm').reset();
+    document.getElementById('selected-file-name').textContent = '';
+}
+
+function updateFileName(input) {
+    const fileName = input.files[0]?.name || '';
+    document.getElementById('selected-file-name').textContent = fileName ? `Selected: ${fileName}` : '';
+}
+
+document.getElementById('csvImportForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const importBtn = document.getElementById('importBtn');
+    const originalText = importBtn.innerHTML;
+    
+    // Disable button and show loading
+    importBtn.disabled = true;
+    importBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Importing...';
+    
+    try {
+        const response = await fetch('{{ route('students.upload-csv') }}', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message);
+            closeImportModal();
+            location.reload();
+        } else {
+            alert('Error: ' + (data.message || 'Failed to import CSV'));
+        }
+    } catch (error) {
+        console.error('Import error:', error);
+        alert('Error importing CSV: ' + error.message);
+    } finally {
+        importBtn.disabled = false;
+        importBtn.innerHTML = originalText;
+    }
 });
 </script>
 

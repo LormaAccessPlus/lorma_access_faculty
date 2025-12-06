@@ -252,6 +252,7 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::post('/component/{componentId}/add-item', [App\Http\Controllers\DynamicGradingController::class, 'addComponentItem'])->name('add-component-item');
         Route::post('/save-grade', [App\Http\Controllers\DynamicGradingController::class, 'saveGrade'])->name('save-grade');
         Route::post('/{id}/fetch-scores', [App\Http\Controllers\DynamicGradingController::class, 'fetchScoresFromGCR'])->name('fetch-scores');
+        Route::post('/component-item/{itemId}/update-max-score', [App\Http\Controllers\DynamicGradingController::class, 'updateMaxScore'])->name('update-max-score');
     });
     
     // Student Mapping Page (Legacy - keep for now)

@@ -87,6 +87,20 @@
                             onmouseout="this.style.transform='translateY(0)';">
                         <i class="fas fa-plus mr-2"></i>Add New Activity
                     </button>
+                    @php
+                        $gradingClass = \App\Models\GradingClass::where('subject_id', $subject->id)
+                            ->where('faculty_id', auth('faculty')->id())
+                            ->where('term', 'prelim')
+                            ->first();
+                    @endphp
+                    @if($gradingClass)
+                        <a href="{{ route('grading.grade-sheet', $gradingClass->id) }}" 
+                           class="flex items-center px-4 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                           onmouseover="this.style.transform='translateY(-1px)';"
+                           onmouseout="this.style.transform='translateY(0)';">
+                            <i class="fas fa-table mr-2"></i>Grade Sheet
+                        </a>
+                    @endif
                 </div>
             </div>
             
@@ -345,21 +359,16 @@
                         </div>
                     </div>
                     
-                    <!-- Activity Category (for Nursing Matrix) -->
+                    <!-- Activity Category -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">
                             <i class="fas fa-th-list mr-1"></i>Category
-                            <span class="text-xs text-gray-500">(For Nursing Matrix)</span>
                         </label>
                         <select x-model="newActivity.activity_category" 
                                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                            <option value="activity">📝 Activity (15% weight)</option>
-                            <option value="quiz">❓ Quiz (25% weight)</option>
+                            <option value="activity">📝 Activity</option>
+                            <option value="quiz">❓ Quiz</option>
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            Quizzes have higher weight (25%) in nursing matrix calculations
-                        </p>
                     </div>
                     
                     <div class="grid grid-cols-2 gap-4">

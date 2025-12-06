@@ -72,6 +72,7 @@
                             required>
                         <option value="">Select subject type</option>
                         <option value="lecture_only" {{ old('type', $subject->type) === 'lecture_only' ? 'selected' : '' }}>Lecture Only</option>
+                        <option value="lab_only" {{ old('type', $subject->type) === 'lab_only' ? 'selected' : '' }}>Lab Only</option>
                         <option value="lecture_lab" {{ old('type', $subject->type) === 'lecture_lab' ? 'selected' : '' }}>Lecture + Laboratory</option>
                     </select>
                     @error('type')

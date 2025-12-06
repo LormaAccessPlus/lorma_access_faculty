@@ -39,7 +39,7 @@ class GradeController extends Controller
                 $query->orderBy('term')->orderBy('type')->orderBy('created_at');
             },
             'studentMappings' => function ($query) {
-                $query->orderBy('student_name');
+                $query->whereNotNull('school_student_id')->orderBy('student_name');
             }
         ]);
 
@@ -99,7 +99,7 @@ class GradeController extends Controller
                 $query->where('term', $term)->orderBy('type')->orderBy('created_at');
             },
             'studentMappings' => function ($query) {
-                $query->orderBy('student_name');
+                $query->whereNotNull('school_student_id')->orderBy('student_name');
             }
         ]);
 
@@ -1155,7 +1155,7 @@ class GradeController extends Controller
                     $query->orderBy('term')->orderBy('type')->orderBy('created_at');
                 },
                 'studentMappings' => function ($query) {
-                    $query->orderBy('student_name');
+                    $query->whereNotNull('school_student_id')->orderBy('student_name');
                 }
             ]);
 
@@ -1198,7 +1198,7 @@ class GradeController extends Controller
             
             $subject->load([
                 'studentMappings' => function ($query) {
-                    $query->orderBy('student_name');
+                    $query->whereNotNull('school_student_id')->orderBy('student_name');
                 }
             ]);
 
@@ -1245,7 +1245,7 @@ class GradeController extends Controller
     {
         $subject->load([
             'studentMappings' => function ($query) {
-                $query->orderBy('student_name');
+                $query->whereNotNull('school_student_id')->orderBy('student_name');
             }
         ]);
 

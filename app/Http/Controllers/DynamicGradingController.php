@@ -224,7 +224,13 @@ class DynamicGradingController extends Controller
         $faculty = auth('faculty')->user();
         $gradingClass = GradingClass::where('id', $id)
             ->where('faculty_id', $faculty->id)
-            ->with(['subject.studentMappings', 'components.items.grades', 'components.items.activity'])
+            ->with([
+                'subject.studentMappings' => function ($query) {
+                    $query->whereNotNull('student_id')->whereNotNull('gcr_student_id');
+                },
+                'components.items.grades',
+                'components.items.activity'
+            ])
             ->firstOrFail();
 
         // Get all terms for this subject
@@ -242,8 +248,9 @@ class DynamicGradingController extends Controller
             ->with(['components.items.grades'])
             ->first();
 
-        // Get students for this class
+        // Get students for this class (only GCR matched students)
         $students = StudentMapping::where('subject_id', $gradingClass->subject_id)
+            ->whereNotNull('gcr_student_id')
             ->orderBy('student_name')
             ->get();
 
@@ -436,6 +443,65 @@ class DynamicGradingController extends Controller
             return response()->json(['success' => true, 'message' => "Imported {$importedCount} scores from Google Classroom"]);
         } catch (\Exception $e) {
             Log::error('Failed to fetch scores from GCR', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    public function updateMaxScore(Request $request, $itemId)
+    {
+        $request->validate([
+            'max_score' => 'required|numeric|min:0.01',
+        ]);
+
+        try {
+            $faculty = auth('faculty')->user();
+            
+            // Get the component item
+            $item = ComponentItem::findOrFail($itemId);
+            $component = $item->component;
+            $gradingClass = $component->gradingClass;
+            
+            // Verify faculty owns this grading class
+            if ($gradingClass->faculty_id !== $faculty->id) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+            
+            $oldMaxScore = $item->max_score;
+            $newMaxScore = $request->max_score;
+            
+            // Update the max score
+            $item->max_score = $newMaxScore;
+            $item->save();
+            
+            // Recalculate all computed scores for this item
+            $grades = StudentGrade::where('component_item_id', $itemId)->get();
+            
+            foreach ($grades as $grade) {
+                if ($grade->score !== null && $component->formula) {
+                    $computedScore = $this->applyFormula(
+                        $grade->score,
+                        $newMaxScore,
+                        $component->formula
+                    );
+                    $grade->computed_score = $computedScore;
+                    $grade->save();
+                }
+            }
+            
+            Log::info('Updated max score', [
+                'item_id' => $itemId,
+                'old_max' => $oldMaxScore,
+                'new_max' => $newMaxScore,
+                'grades_recalculated' => $grades->count()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Max score updated and grades recalculated',
+                'max_score' => $newMaxScore
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to update max score', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
         }
     }

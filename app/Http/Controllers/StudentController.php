@@ -126,7 +126,10 @@ class StudentController extends Controller
             $emailIndex = $this->findColumnIndex($header, ['email', 'student_email', 'email_address']);
 
             if ($nameIndex === false) {
-                return back()->with('error', 'CSV must contain a name column (name, student_name, or full_name)');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'CSV must contain a name column (name, student_name, or full_name)'
+                ], 400);
             }
 
             // Get GCR students for this subject
@@ -144,6 +147,9 @@ class StudentController extends Controller
                 // Auto-match with GCR students
                 $matchResult = $this->autoMatchStudent($studentName, $studentEmail, $gcrStudents);
 
+                // Auto-match with school database
+                $schoolStudentId = $this->findSchoolStudent($studentName, $studentEmail);
+
                 StudentMapping::updateOrCreate(
                     [
                         'subject_id' => $subject->id,
@@ -151,9 +157,10 @@ class StudentController extends Controller
                     ],
                     [
                         'student_email' => $studentEmail,
+                        'student_id' => $schoolStudentId,
                         'gcr_student_id' => $matchResult['gcr_student_id'],
                         'mapping_confidence' => $matchResult['confidence'],
-                        'csv_data' => $row,
+                        'csv_data' => json_encode($row),
                         'auto_matched' => $matchResult['matched'],
                     ]
                 );
@@ -164,11 +171,17 @@ class StudentController extends Controller
                 }
             }
 
-            return back()->with('success', "Imported {$imported} students. Auto-matched {$matched} with Google Classroom.");
+            return response()->json([
+                'success' => true,
+                'message' => "Imported {$imported} students. Auto-matched {$matched} with Google Classroom."
+            ]);
 
         } catch (\Exception $e) {
             Log::error('CSV Import Error: ' . $e->getMessage());
-            return back()->with('error', 'Error importing CSV: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error importing CSV: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -218,6 +231,16 @@ class StudentController extends Controller
 
     private function autoMatchStudent($csvName, $csvEmail, $gcrStudents)
     {
+        // If no GCR students, cannot match
+        if (empty($gcrStudents)) {
+            Log::info("No GCR students available for matching: {$csvName}");
+            return [
+                'matched' => false,
+                'gcr_student_id' => null,
+                'confidence' => 0,
+            ];
+        }
+
         $bestMatch = null;
         $highestConfidence = 0;
 
@@ -228,11 +251,16 @@ class StudentController extends Controller
             if ($csvEmail && $gcrStudent['email'] && 
                 strtolower($csvEmail) === strtolower($gcrStudent['email'])) {
                 $confidence = 100;
+                Log::info("Email match found: {$csvName} ({$csvEmail}) -> {$gcrStudent['name']} ({$gcrStudent['email']})");
             }
             // Name similarity
             else {
                 $nameSimilarity = $this->calculateNameSimilarity($csvName, $gcrStudent['name']);
                 $confidence = $nameSimilarity;
+                
+                if ($nameSimilarity > 50) {
+                    Log::info("Name similarity: {$csvName} vs {$gcrStudent['name']} = {$nameSimilarity}%");
+                }
             }
 
             if ($confidence > $highestConfidence) {
@@ -241,8 +269,9 @@ class StudentController extends Controller
             }
         }
 
-        // Only auto-match if confidence is above threshold (80%)
-        if ($highestConfidence >= 80 && $bestMatch) {
+        // Only auto-match if confidence is above threshold (90% for stricter matching)
+        if ($highestConfidence >= 90 && $bestMatch) {
+            Log::info("Auto-matched: {$csvName} -> {$bestMatch['name']} (confidence: {$highestConfidence}%)");
             return [
                 'matched' => true,
                 'gcr_student_id' => $bestMatch['id'],
@@ -250,11 +279,40 @@ class StudentController extends Controller
             ];
         }
 
+        Log::info("No match found for: {$csvName} (best confidence: {$highestConfidence}%)");
         return [
             'matched' => false,
             'gcr_student_id' => null,
             'confidence' => $highestConfidence,
         ];
+    }
+
+    private function findSchoolStudent($name, $email)
+    {
+        try {
+            // Try to find student in school database by email first
+            if ($email) {
+                $student = \DB::connection('school_db')->table('studentdata')
+                    ->where('Email', $email)
+                    ->first();
+                if ($student) {
+                    return $student->StudID;
+                }
+            }
+
+            // Try to find by name
+            $student = \DB::connection('school_db')->table('studentdata')
+                ->whereRaw('LOWER(CONCAT(FirstName, " ", LastName)) = ?', [strtolower($name)])
+                ->first();
+            
+            if ($student) {
+                return $student->StudID;
+            }
+        } catch (\Exception $e) {
+            Log::warning('Could not connect to school database: ' . $e->getMessage());
+        }
+
+        return null;
     }
 
     private function calculateNameSimilarity($name1, $name2)
@@ -264,32 +322,47 @@ class StudentController extends Controller
 
         // Exact match
         if ($name1 === $name2) {
-            return 100;
+            return 100.0;
         }
 
         // Remove common suffixes/prefixes
         $name1 = preg_replace('/\b(jr|sr|ii|iii|iv)\b\.?/i', '', $name1);
         $name2 = preg_replace('/\b(jr|sr|ii|iii|iv)\b\.?/i', '', $name2);
 
-        // Split into parts
-        $parts1 = preg_split('/\s+/', trim($name1));
-        $parts2 = preg_split('/\s+/', trim($name2));
+        // Split into parts and filter empty
+        $parts1 = array_values(array_filter(preg_split('/\s+/', trim($name1))));
+        $parts2 = array_values(array_filter(preg_split('/\s+/', trim($name2))));
 
-        // Check if all parts of shorter name are in longer name
-        $shorter = count($parts1) < count($parts2) ? $parts1 : $parts2;
-        $longer = count($parts1) >= count($parts2) ? $parts2 : $parts1;
-
-        $matchCount = 0;
-        foreach ($shorter as $part) {
-            foreach ($longer as $longPart) {
-                similar_text($part, $longPart, $percent);
-                if ($percent > 85) {
-                    $matchCount++;
-                    break;
-                }
-            }
+        // Must have same number of name parts
+        if (count($parts1) !== count($parts2)) {
+            return 0.0;
         }
 
-        return ($matchCount / count($shorter)) * 100;
+        // If no parts, return 0
+        if (count($parts1) === 0) {
+            return 0.0;
+        }
+
+        $totalSimilarity = 0.0;
+        
+        // Compare each part in order
+        for ($i = 0; $i < count($parts1); $i++) {
+            $part1 = $parts1[$i];
+            $part2 = $parts2[$i];
+            
+            // Calculate similarity for this part
+            $percent = 0.0;
+            similar_text($part1, $part2, $percent);
+            
+            // If any part is less than 90% similar, names don't match
+            if ($percent < 90.0) {
+                return 0.0;
+            }
+            
+            $totalSimilarity += $percent;
+        }
+
+        // Return average similarity
+        return $totalSimilarity / count($parts1);
     }
 }

@@ -88,6 +88,7 @@
                                             required>
                                         <option value="activity" {{ $component->component_type == 'activity' ? 'selected' : '' }}>Activity</option>
                                         <option value="quiz" {{ $component->component_type == 'quiz' ? 'selected' : '' }}>Quiz</option>
+                                        <option value="class_standing" {{ $component->component_type == 'class_standing' ? 'selected' : '' }}>Class Standing (Activities + Quizzes)</option>
                                         <option value="exam" {{ $component->component_type == 'exam' ? 'selected' : '' }}>Exam</option>
                                         <option value="attendance" {{ $component->component_type == 'attendance' ? 'selected' : '' }}>Attendance</option>
                                         <option value="custom" {{ $component->component_type == 'custom' ? 'selected' : '' }}>Custom</option>
@@ -327,6 +328,7 @@ function addComponent() {
                             required>
                         <option value="activity">Activity</option>
                         <option value="quiz">Quiz</option>
+                        <option value="class_standing">Class Standing (Activities + Quizzes)</option>
                         <option value="exam">Exam</option>
                         <option value="attendance">Attendance</option>
                         <option value="custom">Custom</option>
