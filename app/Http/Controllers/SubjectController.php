@@ -138,4 +138,30 @@ class SubjectController extends Controller
         return redirect()->route('subjects.index')
             ->with('success', "Synced {$syncedCount} subjects from school database.");
     }
+
+    /**
+     * Archive a subject
+     */
+    public function archive(Subject $subject): RedirectResponse
+    {
+        $this->authorize('update', $subject);
+        
+        $subject->update(['gcr_course_state' => 'ARCHIVED']);
+
+        return redirect()->route('archive.show', $subject)
+            ->with('success', "Subject '{$subject->subject_code}' has been archived.");
+    }
+
+    /**
+     * Unarchive a subject
+     */
+    public function unarchive(Subject $subject): RedirectResponse
+    {
+        $this->authorize('update', $subject);
+        
+        $subject->update(['gcr_course_state' => 'ACTIVE']);
+
+        return redirect()->route('subjects.show', $subject)
+            ->with('success', "Subject '{$subject->subject_code}' has been unarchived.");
+    }
 }

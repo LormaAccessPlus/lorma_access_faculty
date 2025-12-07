@@ -150,6 +150,16 @@
                                 </a>
                             </div>
                         </div>
+                        
+                        <!-- Archive -->
+                        <a href="{{ route('archive.index') }}" 
+                           class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:text-white transition-colors {{ request()->routeIs('archive.*') ? 'text-white border-r-2' : 'hover:bg-opacity-90' }}"
+                           style="{{ request()->routeIs('archive.*') ? 'background-color: #08695A; border-color: #08695A;' : '' }}"
+                           onmouseover="if (!this.classList.contains('text-white')) this.style.backgroundColor='#08695A'; if (!this.classList.contains('text-white')) this.style.color='white';"
+                           onmouseout="if (!this.classList.contains('text-white')) this.style.backgroundColor=''; if (!this.classList.contains('text-white')) this.style.color='';">
+                            <i class="fas fa-archive w-5 h-5 mr-3"></i>
+                            <span class="font-medium">Archive</span>
+                        </a>
                     </div>
                     
                     

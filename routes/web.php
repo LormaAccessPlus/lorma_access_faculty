@@ -143,6 +143,7 @@ Route::post('/debug-create-mapping', function (\Illuminate\Http\Request $request
 // Subject Mapping Routes - REMOVED (duplicate of Google Classroom page)
 
 // Protected Routes
+use App\Http\Controllers\ArchiveController;
 Route::middleware(['auth.faculty'])->group(function () {
     Route::get('/', [App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
     
@@ -165,19 +166,21 @@ Route::middleware(['auth.faculty'])->group(function () {
     // Subject Management Routes (Legacy - for existing mapped subjects)
     Route::resource('subjects', SubjectController::class)->except(['create', 'store']);
     Route::post('/subjects/sync', [SubjectController::class, 'sync'])->name('subjects.sync');
+    Route::post('/subjects/{subject}/archive', [SubjectController::class, 'archive'])->name('subjects.archive');
+    Route::post('/subjects/{subject}/unarchive', [SubjectController::class, 'unarchive'])->name('subjects.unarchive');
     
     // Google Classroom Integration Routes
     Route::prefix('classroom')->name('classroom.')->group(function () {
         Route::get('/', [ClassroomSyncController::class, 'index'])->name('index');
         Route::post('/fetch-courses', [ClassroomSyncController::class, 'fetchCourses'])->name('fetch-courses');
         Route::post('/connect-subject', [ClassroomSyncController::class, 'connectSubject'])->name('connect-subject');
-        Route::post('/disconnect-subject', [ClassroomSyncController::class, 'disconnectSubject'])->name('disconnect-subject');
         Route::post('/sync-students', [ClassroomSyncController::class, 'syncStudents'])->name('sync-students');
         Route::post('/sync/{subject}/activities', [ClassroomSyncController::class, 'syncActivities'])->name('sync-activities');
         Route::get('/{subject}/available-coursework', [ClassroomSyncController::class, 'getAvailableCoursework'])->name('available-coursework');
         Route::post('/{subject}/import-selected', [ClassroomSyncController::class, 'importSelectedCoursework'])->name('import-selected');
         Route::post('/course-details', [ClassroomSyncController::class, 'getCourseDetails'])->name('course-details');
         Route::post('/test-connection', [ClassroomSyncController::class, 'testConnection'])->name('test-connection');
+        Route::post('/sync-course-states', [ClassroomSyncController::class, 'syncCourseStates'])->name('sync-course-states');
     });
     
     // Activity Management Routes
@@ -199,6 +202,12 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/subjects/{subject}/activities/organized', [App\Http\Controllers\ActivityController::class, 'getOrganized'])->name('api.activities.organized');
     });
     
+    // Archive Routes
+    Route::prefix('archive')->name('archive.')->group(function () {
+        Route::get('/', [ArchiveController::class, 'index'])->name('index');
+        Route::get('/{subject}', [ArchiveController::class, 'show'])->name('show');
+    });
+    
     // Student Mapping Routes
     Route::prefix('subjects/{subject}/mappings')->name('mappings.')->group(function () {
         Route::get('/', [App\Http\Controllers\MappingController::class, 'index'])->name('index');
@@ -215,6 +224,7 @@ Route::middleware(['auth.faculty'])->group(function () {
     // Grade Matrix Routes
     Route::prefix('grades')->name('grades.')->group(function () {
         Route::get('/subjects/{subject}/matrix', [App\Http\Controllers\GradeController::class, 'matrix'])->name('matrix');
+        Route::get('/subjects/{subject}/full-matrix', [App\Http\Controllers\GradeController::class, 'fullMatrix'])->name('full-matrix');
         Route::get('/subjects/{subject}/term/{term?}', [App\Http\Controllers\GradeController::class, 'termGrades'])->name('term');
         Route::post('/update', [App\Http\Controllers\GradeController::class, 'updateGrade'])->name('update');
         Route::post('/update-exam-score', [App\Http\Controllers\GradeController::class, 'updateExamScore'])->name('update-exam-score');
@@ -233,6 +243,7 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/subjects/{subject}/export/activities', [App\Http\Controllers\GradeController::class, 'exportActivities'])->name('export.activities');
         Route::get('/subjects/{subject}/export/pp', [App\Http\Controllers\GradeController::class, 'exportPP'])->name('export.pp');
         Route::get('/subjects/{subject}/export/term/{term}', [App\Http\Controllers\GradeController::class, 'exportTerm'])->name('export.term');
+        Route::get('/subjects/{subject}/export/full-matrix', [App\Http\Controllers\GradeController::class, 'exportFullMatrix'])->name('export.full-matrix');
     });
     
     // Students Page (CSV Import + Auto-matching)

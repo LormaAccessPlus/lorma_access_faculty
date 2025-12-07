@@ -7,9 +7,14 @@
     <div class="max-w-6xl mx-auto">
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Google Classroom Integration</h1>
-            <button id="testConnection" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                Test Connection
-            </button>
+            <div class="flex space-x-3">
+                <button id="syncArchiveStatus" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg">
+                    <i class="fas fa-sync-alt mr-2"></i>Sync Archive Status
+                </button>
+                <button id="testConnection" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    Test Connection
+                </button>
+            </div>
         </div>
 
         <!-- Connection Status -->
@@ -67,10 +72,6 @@
                                         <button onclick="viewCourseDetails('{{ $subject->gcr_class_id }}')" 
                                                 class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
                                             View Details
-                                        </button>
-                                        <button onclick="disconnectSubject({{ $subject->id }})" 
-                                                class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">
-                                            Disconnect
                                         </button>
                                     </div>
                                 </div>
@@ -337,34 +338,6 @@ function connectSubjectToCourse(gcrClassId) {
     });
 }
 
-function disconnectSubject(subjectId) {
-    if (!confirm('Are you sure you want to disconnect this subject from Google Classroom? This will also remove all student mappings.')) {
-        return;
-    }
-    
-    fetch('/classroom/disconnect-subject', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        },
-        body: JSON.stringify({
-            subject_id: subjectId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        } else {
-            alert(data.message);
-        }
-    })
-    .catch(error => {
-        alert('Failed to disconnect subject');
-    });
-}
-
 function syncStudents(subjectId) {
     const button = event.target;
     const originalText = button.textContent;
@@ -473,5 +446,44 @@ function displayCourseDetails(data) {
 function closeDetailsModal() {
     document.getElementById('detailsModal').classList.add('hidden');
 }
+
+// Sync Archive Status from Google Classroom
+document.getElementById('syncArchiveStatus').addEventListener('click', function() {
+    const button = this;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
+    button.disabled = true;
+    
+    fetch('/classroom/sync-course-states', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let message = data.message;
+            if (data.archived_count > 0) {
+                message += '\n\nArchived subjects have been moved to the Archive page.';
+            }
+            alert(message);
+            if (data.synced_count > 0) {
+                location.reload();
+            }
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Sync error:', error);
+        alert('Failed to sync archive status');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+});
 </script>
 @endsection

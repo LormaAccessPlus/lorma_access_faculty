@@ -941,4 +941,94 @@ class ClassroomSyncController extends Controller
             'activity_id' => $activity->id
         ]);
     }
+
+    /**
+     * Sync course states from Google Classroom
+     * This updates the gcr_course_state for all connected subjects
+     */
+    public function syncCourseStates(Request $request): JsonResponse
+    {
+        try {
+            $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
+            
+            if (!$this->classroomService->authenticateWithFaculty($faculty)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to authenticate with Google Classroom.'
+                ], 401);
+            }
+
+            // Get all connected subjects for this faculty
+            $connectedSubjects = Subject::where('faculty_id', $faculty->id)
+                ->whereNotNull('gcr_class_id')
+                ->get();
+
+            if ($connectedSubjects->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No connected subjects to sync.',
+                    'synced_count' => 0,
+                    'archived_count' => 0
+                ]);
+            }
+
+            // Fetch all courses including archived ones
+            $courses = $this->classroomService->getCourses(true);
+            $coursesById = collect($courses)->keyBy('id');
+
+            $syncedCount = 0;
+            $archivedCount = 0;
+            $errors = [];
+
+            foreach ($connectedSubjects as $subject) {
+                $course = $coursesById->get($subject->gcr_class_id);
+                
+                if ($course) {
+                    $newState = $course['course_state'];
+                    $oldState = $subject->gcr_course_state;
+                    
+                    if ($oldState !== $newState) {
+                        $subject->update(['gcr_course_state' => $newState]);
+                        $syncedCount++;
+                        
+                        if ($newState === 'ARCHIVED') {
+                            $archivedCount++;
+                            Log::info('Subject archived from GCR sync', [
+                                'subject_id' => $subject->id,
+                                'subject_code' => $subject->subject_code,
+                                'gcr_class_id' => $subject->gcr_class_id
+                            ]);
+                        }
+                    }
+                } else {
+                    // Course not found in GCR - might have been deleted
+                    $errors[] = "Course not found for subject: {$subject->subject_code}";
+                }
+            }
+
+            $message = "Synced course states for {$syncedCount} subject(s).";
+            if ($archivedCount > 0) {
+                $message .= " {$archivedCount} subject(s) were archived.";
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'synced_count' => $syncedCount,
+                'archived_count' => $archivedCount,
+                'errors' => $errors
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to sync course states from GCR', [
+                'faculty_id' => $faculty->id ?? null,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync course states: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

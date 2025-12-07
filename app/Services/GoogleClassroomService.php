@@ -115,17 +115,21 @@ class GoogleClassroomService
 
     /**
      * Fetch all courses for the authenticated user
+     * @param bool $includeArchived Whether to include archived courses
      */
-    public function getCourses(): array
+    public function getCourses(bool $includeArchived = false): array
     {
         try {
             $courses = [];
             $pageToken = null;
             
+            // Define which course states to fetch
+            $courseStates = $includeArchived ? ['ACTIVE', 'ARCHIVED'] : ['ACTIVE'];
+            
             do {
                 $params = [
                     'teacherId' => 'me',
-                    'courseStates' => ['ACTIVE'],
+                    'courseStates' => $courseStates,
                     'pageSize' => 100
                 ];
                 
@@ -162,6 +166,31 @@ class GoogleClassroomService
                 'code' => $e->getCode()
             ]);
             throw new \Exception('Failed to fetch courses from Google Classroom: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get a single course by ID to check its current state
+     */
+    public function getCourse(string $courseId): ?array
+    {
+        try {
+            $course = $this->service->courses->get($courseId);
+            
+            return [
+                'id' => $course->getId(),
+                'name' => $course->getName(),
+                'section' => $course->getSection(),
+                'course_state' => $course->getCourseState(),
+                'alternate_link' => $course->getAlternateLink()
+            ];
+        } catch (GoogleServiceException $e) {
+            Log::error('Failed to fetch Google Classroom course', [
+                'course_id' => $courseId,
+                'error' => $e->getMessage(),
+                'code' => $e->getCode()
+            ]);
+            return null;
         }
     }
 

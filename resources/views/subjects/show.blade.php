@@ -160,8 +160,14 @@
             <div class="bg-white rounded-lg shadow-md p-6">
                 <h3 class="text-lg font-semibold text-gray-800 mb-4">Actions</h3>
                 <div class="space-y-3">
+                    <a href="{{ route('grades.full-matrix', $subject) }}" class="block w-full text-white px-4 py-2 rounded-lg transition duration-200 text-center"
+                       style="background-color: #08695A;"
+                       onmouseover="this.style.backgroundColor='#065A4A';"
+                       onmouseout="this.style.backgroundColor='#08695A';">
+                        <i class="fas fa-table mr-2"></i>Full Grade Matrix
+                    </a>
                     <a href="{{ route('grades.matrix', $subject) }}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition duration-200 text-center">
-                        Grade Matrix
+                        Grade Summary
                     </a>
                     <a href="{{ route('grades.term', $subject) }}" class="block w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition duration-200 text-center">
                         Term-Based Grading
@@ -177,6 +183,25 @@
                     <button class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition duration-200">
                         Export Grades
                     </button>
+                    
+                    <!-- Archive/Unarchive Button -->
+                    <div class="pt-3 border-t border-gray-200 mt-3">
+                        @if($subject->isArchived())
+                            <form action="{{ route('subjects.unarchive', $subject) }}" method="POST">
+                                @csrf
+                                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition duration-200">
+                                    <i class="fas fa-box-open mr-2"></i>Unarchive Subject
+                                </button>
+                            </form>
+                        @else
+                            <form action="{{ route('subjects.archive', $subject) }}" method="POST" onsubmit="return confirm('Are you sure you want to archive this subject? Students will still be able to view their grades but no changes can be made.');">
+                                @csrf
+                                <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg transition duration-200">
+                                    <i class="fas fa-archive mr-2"></i>Archive Subject
+                                </button>
+                            </form>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>

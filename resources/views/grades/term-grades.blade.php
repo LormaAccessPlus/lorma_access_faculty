@@ -33,7 +33,7 @@
                     };
                 @endphp
                 <!-- Debug: From = {{ $from ?? 'null' }} -->
-                <a href="{{ route('grades.matrix', ['subject' => $subject, 'from' => $from]) }}" class="text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                <a href="{{ route('grades.full-matrix', ['subject' => $subject]) }}" class="text-white px-4 py-2 rounded-lg font-medium transition-colors"
                    style="background-color: #08695A;"
                    onmouseover="this.style.backgroundColor='#065A4A';"
                    onmouseout="this.style.backgroundColor='#08695A';">

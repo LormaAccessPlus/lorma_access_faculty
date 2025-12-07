@@ -39,7 +39,7 @@ class GradeController extends Controller
                 $query->orderBy('term')->orderBy('type')->orderBy('created_at');
             },
             'studentMappings' => function ($query) {
-                $query->whereNotNull('school_student_id')->orderBy('student_name');
+                $query->whereNotNull('student_id')->orderBy('student_name');
             }
         ]);
 
@@ -78,6 +78,61 @@ class GradeController extends Controller
     }
 
     /**
+     * Display the full grade matrix for a subject (all terms with all activities)
+     */
+    public function fullMatrix(Subject $subject): View
+    {
+        // Check if subject is archived
+        if ($subject->isArchived()) {
+            return view('grades.matrix-archived', compact('subject'));
+        }
+
+        // Load subject with relationships
+        $subject->load([
+            'activities' => function ($query) {
+                $query->orderBy('term')->orderBy('type')->orderBy('created_at');
+            },
+            'studentMappings' => function ($query) {
+                $query->orderBy('student_name');
+            }
+        ]);
+
+        // Get all activities grouped by term
+        $allActivities = $subject->activities->groupBy('term');
+        
+        // Get existing grade records for this subject
+        $gradeRecords = GradeRecord::whereHas('studentMapping', function ($query) use ($subject) {
+            $query->where('subject_id', $subject->id);
+        })->with(['studentMapping', 'activity'])->get();
+
+        // Create a matrix structure for easy access
+        $gradeMatrix = [];
+        foreach ($gradeRecords as $record) {
+            $gradeMatrix[$record->student_mapping_id][$record->activity_id] = $record;
+        }
+
+        // Get all term grades grouped by student
+        $termGrades = TermGrade::where('subject_id', $subject->id)
+            ->get()
+            ->groupBy('student_mapping_id');
+
+        // Get final rating configuration
+        $finalRatingConfig = $subject->final_rating_config ?? [
+            'prelim_weight' => 30,
+            'midterm_weight' => 30,
+            'finals_weight' => 40
+        ];
+
+        return view('grades.full-matrix', compact(
+            'subject',
+            'allActivities',
+            'gradeMatrix',
+            'termGrades',
+            'finalRatingConfig'
+        ));
+    }
+
+    /**
      * Display the term-based grading interface for a subject
      */
     public function termGrades(Subject $subject, string $term = 'prelim'): View
@@ -99,7 +154,7 @@ class GradeController extends Controller
                 $query->where('term', $term)->orderBy('type')->orderBy('created_at');
             },
             'studentMappings' => function ($query) {
-                $query->whereNotNull('school_student_id')->orderBy('student_name');
+                $query->whereNotNull('student_id')->orderBy('student_name');
             }
         ]);
 
@@ -1155,7 +1210,7 @@ class GradeController extends Controller
                     $query->orderBy('term')->orderBy('type')->orderBy('created_at');
                 },
                 'studentMappings' => function ($query) {
-                    $query->whereNotNull('school_student_id')->orderBy('student_name');
+                    $query->whereNotNull('student_id')->orderBy('student_name');
                 }
             ]);
 
@@ -1198,7 +1253,7 @@ class GradeController extends Controller
             
             $subject->load([
                 'studentMappings' => function ($query) {
-                    $query->whereNotNull('school_student_id')->orderBy('student_name');
+                    $query->whereNotNull('student_id')->orderBy('student_name');
                 }
             ]);
 
@@ -1239,13 +1294,83 @@ class GradeController extends Controller
     }
 
     /**
+     * Export Full Grade Matrix to PDF
+     */
+    public function exportFullMatrix(Request $request, Subject $subject)
+    {
+        try {
+            $subject->load([
+                'activities' => function ($query) {
+                    $query->orderBy('term')->orderBy('type')->orderBy('created_at');
+                },
+                'studentMappings' => function ($query) {
+                    $query->orderBy('student_name');
+                }
+            ]);
+
+            // Get all activities grouped by term
+            $allActivities = $subject->activities->groupBy('term');
+            
+            // Get existing grade records for this subject
+            $gradeRecords = GradeRecord::whereHas('studentMapping', function ($query) use ($subject) {
+                $query->where('subject_id', $subject->id);
+            })->with(['studentMapping', 'activity'])->get();
+
+            // Create a matrix structure for easy access
+            $gradeMatrix = [];
+            foreach ($gradeRecords as $record) {
+                $gradeMatrix[$record->student_mapping_id][$record->activity_id] = $record;
+            }
+
+            // Get all term grades grouped by student
+            $termGrades = TermGrade::where('subject_id', $subject->id)
+                ->get()
+                ->groupBy('student_mapping_id');
+
+            // Get final rating configuration
+            $finalRatingConfig = $subject->final_rating_config ?? [
+                'prelim_weight' => 30,
+                'midterm_weight' => 30,
+                'finals_weight' => 40
+            ];
+
+            // Get dean name from request and faculty from auth
+            $deanName = $request->input('dean_name', '');
+            $faculty = Auth::guard('faculty')->user();
+            $adviserName = $faculty ? $faculty->name : '';
+
+            $pdf = \PDF::loadView('grades.exports.full-matrix', compact(
+                'subject',
+                'allActivities',
+                'gradeMatrix',
+                'termGrades',
+                'finalRatingConfig',
+                'deanName',
+                'adviserName'
+            ));
+            
+            // Set landscape orientation for full matrix
+            $pdf->setPaper('legal', 'landscape');
+            
+            return $pdf->download($subject->subject_code . '_Full_Grade_Matrix.pdf');
+        } catch (\Exception $e) {
+            Log::error('Failed to export Full Matrix PDF', [
+                'subject_id' => $subject->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->with('error', 'Failed to export PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Export Term-Based Grading to PDF
      */
     public function exportTerm(Request $request, Subject $subject, string $term)
     {
         $subject->load([
             'studentMappings' => function ($query) {
-                $query->whereNotNull('school_student_id')->orderBy('student_name');
+                $query->whereNotNull('student_id')->orderBy('student_name');
             }
         ]);
 
