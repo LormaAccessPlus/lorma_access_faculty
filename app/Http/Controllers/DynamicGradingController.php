@@ -43,6 +43,7 @@ class DynamicGradingController extends Controller
     {
         $request->validate([
             'subject_id' => 'required|exists:subjects,id',
+            'department' => 'required|string',
         ]);
 
         $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
@@ -67,6 +68,7 @@ class DynamicGradingController extends Controller
                 'faculty_id' => $faculty->id,
                 'gcr_class_id' => $subject->gcr_class_id,
                 'class_name' => $subject->subject_name . ' - ' . $subject->section,
+                'department' => $request->department,
                 'term' => $term,
                 'term_formula' => null, // Will be set during configuration
             ]);

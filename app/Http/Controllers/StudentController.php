@@ -119,16 +119,42 @@ class StudentController extends Controller
         try {
             $file = $request->file('csv_file');
             $csvData = array_map('str_getcsv', file($file->getRealPath()));
-            $header = array_shift($csvData); // Remove header row
-
-            // Expected columns: name, email (at minimum)
-            $nameIndex = $this->findColumnIndex($header, ['name', 'student_name', 'full_name']);
-            $emailIndex = $this->findColumnIndex($header, ['email', 'student_email', 'email_address']);
+            
+            // Find the header row (the one that contains #, ID No., Full Name, etc.)
+            $header = null;
+            $headerRowIndex = 0;
+            
+            foreach ($csvData as $index => $row) {
+                // Look for the row that has '#' in first column and 'ID No.' or 'Full Name' in subsequent columns
+                if (!empty($row[0]) && trim($row[0]) === '#') {
+                    $header = $row;
+                    $headerRowIndex = $index;
+                    break;
+                }
+            }
+            
+            if (!$header) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Could not find header row in CSV. Expected a row starting with "#"'
+                ], 400);
+            }
+            
+            // Remove all rows up to and including the header
+            $csvData = array_slice($csvData, $headerRowIndex + 1);
+            
+            // Expected columns: #, ID No., Full Name, Gender, Course, YL
+            $numberIndex = $this->findColumnIndex($header, ['#', 'no', 'number']);
+            $idIndex = $this->findColumnIndex($header, ['id no.', 'id no', 'id_no', 'student_id', 'id number']);
+            $nameIndex = $this->findColumnIndex($header, ['full name', 'name', 'student_name', 'fullname']);
+            $genderIndex = $this->findColumnIndex($header, ['gender', 'sex']);
+            $courseIndex = $this->findColumnIndex($header, ['course', 'program']);
+            $ylIndex = $this->findColumnIndex($header, ['yl', 'year level', 'year', 'yearlevel']);
 
             if ($nameIndex === false) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'CSV must contain a name column (name, student_name, or full_name)'
+                    'message' => 'CSV must contain a name column (Full Name, name, or student_name). Found columns: ' . implode(', ', $header)
                 ], 400);
             }
 
@@ -138,35 +164,68 @@ class StudentController extends Controller
             $imported = 0;
             $matched = 0;
 
+            $studentsToImport = [];
+            
             foreach ($csvData as $row) {
                 if (empty($row[$nameIndex])) continue;
 
                 $studentName = trim($row[$nameIndex]);
-                $studentEmail = $emailIndex !== false ? trim($row[$emailIndex]) : null;
+                
+                // Convert name to "LASTNAME, First Name" format
+                $formattedName = $this->formatNameToLastnameFirst($studentName);
+                
+                // Build CSV data object with all available fields
+                $csvDataObject = [
+                    'number' => $numberIndex !== false ? trim($row[$numberIndex]) : null,
+                    'id_no' => $idIndex !== false ? trim($row[$idIndex]) : null,
+                    'full_name' => $studentName,
+                    'gender' => $genderIndex !== false ? trim($row[$genderIndex]) : null,
+                    'course' => $courseIndex !== false ? trim($row[$courseIndex]) : null,
+                    'yl' => $ylIndex !== false ? trim($row[$ylIndex]) : null,
+                ];
 
-                // Auto-match with GCR students
-                $matchResult = $this->autoMatchStudent($studentName, $studentEmail, $gcrStudents);
+                // Auto-match with GCR students (using original name)
+                $matchResult = $this->autoMatchStudent($studentName, null, $gcrStudents);
 
                 // Auto-match with school database
-                $schoolStudentId = $this->findSchoolStudent($studentName, $studentEmail);
+                $schoolStudentId = $this->findSchoolStudent($studentName, null);
 
+                $studentsToImport[] = [
+                    'formatted_name' => $formattedName,
+                    'original_name' => $studentName,
+                    'csv_data' => $csvDataObject,
+                    'match_result' => $matchResult,
+                    'school_student_id' => $schoolStudentId,
+                ];
+            }
+            
+            // Sort students by formatted name (A-Z)
+            usort($studentsToImport, function($a, $b) {
+                return strcmp($a['formatted_name'], $b['formatted_name']);
+            });
+            
+            // Import sorted students
+            $imported = 0;
+            $matched = 0;
+            
+            foreach ($studentsToImport as $student) {
                 StudentMapping::updateOrCreate(
                     [
                         'subject_id' => $subject->id,
-                        'student_name' => $studentName,
+                        'student_name' => $student['formatted_name'],
                     ],
                     [
-                        'student_email' => $studentEmail,
-                        'student_id' => $schoolStudentId,
-                        'gcr_student_id' => $matchResult['gcr_student_id'],
-                        'mapping_confidence' => $matchResult['confidence'],
-                        'csv_data' => json_encode($row),
-                        'auto_matched' => $matchResult['matched'],
+                        'student_email' => null,
+                        'student_id' => $student['school_student_id'],
+                        'gcr_student_id' => $student['match_result']['gcr_student_id'],
+                        'mapping_confidence' => $student['match_result']['confidence'],
+                        'csv_data' => json_encode($student['csv_data']),
+                        'auto_matched' => $student['match_result']['matched'],
                     ]
                 );
 
                 $imported++;
-                if ($matchResult['matched']) {
+                if ($student['match_result']['matched']) {
                     $matched++;
                 }
             }
@@ -188,9 +247,15 @@ class StudentController extends Controller
     private function findColumnIndex($header, $possibleNames)
     {
         foreach ($possibleNames as $name) {
-            $index = array_search(strtolower($name), array_map('strtolower', $header));
-            if ($index !== false) {
-                return $index;
+            // Normalize both header and search term: lowercase, trim, remove extra spaces and dots
+            $normalizedName = strtolower(trim(str_replace('.', '', $name)));
+            
+            foreach ($header as $index => $headerCol) {
+                $normalizedHeader = strtolower(trim(str_replace('.', '', $headerCol)));
+                
+                if ($normalizedHeader === $normalizedName) {
+                    return $index;
+                }
             }
         }
         return false;
@@ -313,6 +378,30 @@ class StudentController extends Controller
         }
 
         return null;
+    }
+
+    private function formatNameToLastnameFirst($fullName)
+    {
+        $fullName = trim($fullName);
+        
+        // Split name into parts
+        $parts = array_values(array_filter(preg_split('/\s+/', $fullName)));
+        
+        if (count($parts) === 0) {
+            return $fullName;
+        }
+        
+        if (count($parts) === 1) {
+            // Only one name part, return as is in uppercase
+            return strtoupper($parts[0]);
+        }
+        
+        // Last part is the last name, rest are first/middle names
+        $lastName = array_pop($parts);
+        $firstName = implode(' ', $parts);
+        
+        // Format: LASTNAME, First Name
+        return strtoupper($lastName) . ', ' . $firstName;
     }
 
     private function calculateNameSimilarity($name1, $name2)

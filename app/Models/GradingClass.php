@@ -16,6 +16,7 @@ class GradingClass extends Model
         'faculty_id',
         'gcr_class_id',
         'class_name',
+        'department',
         'term',
         'term_formula',
     ];

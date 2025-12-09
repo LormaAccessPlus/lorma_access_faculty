@@ -238,6 +238,28 @@
                             </select>
                         </div>
 
+                        <div class="mb-4">
+                            <label for="department" class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-building mr-1"></i> Department
+                            </label>
+                            <select class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                                    id="department" 
+                                    name="department" 
+                                    required>
+                                <option value="">Choose a department...</option>
+                                <option value="College of Nursing">College of Nursing</option>
+                                <option value="College of Pharmacy">College of Pharmacy</option>
+                                <option value="College of Medical Laboratory Science">College of Medical Laboratory Science</option>
+                                <option value="College of Radiologic Technology">College of Radiologic Technology</option>
+                                <option value="College of Physical Therapy">College of Physical Therapy</option>
+                                <option value="College of Respiratory Therapy">College of Respiratory Therapy</option>
+                                <option value="College of Psychology">College of Psychology</option>
+                                <option value="College of Computer Studies & Engineering">College of Computer Studies & Engineering</option>
+                                <option value="College of Business">College of Business</option>
+                                <option value="General Education">General Education</option>
+                            </select>
+                        </div>
+
                         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                             <h4 class="text-sm font-semibold text-blue-900 mb-2">
                                 <i class="fas fa-info-circle mr-1"></i> What Happens Next?
