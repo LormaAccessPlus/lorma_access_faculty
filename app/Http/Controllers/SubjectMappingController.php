@@ -47,6 +47,7 @@ class SubjectMappingController extends Controller
         
         // Get existing mappings
         $existingMappings = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('type', 'mapped')
             ->with('studentMappings')
             ->orderBy('created_at', 'desc')

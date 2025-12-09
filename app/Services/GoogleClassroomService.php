@@ -525,4 +525,41 @@ class GoogleClassroomService
             return false;
         }
     }
+
+    /**
+     * Check if a subject's GCR classroom is archived and archive it if needed
+     */
+    public function checkAndArchiveSubject(\App\Models\Subject $subject): bool
+    {
+        if (!$subject->gcr_class_id || $subject->archived_at) {
+            return false;
+        }
+
+        try {
+            $course = $this->getCourse($subject->gcr_class_id);
+            
+            if ($course && isset($course['course_state']) && $course['course_state'] === 'ARCHIVED') {
+                $subject->update([
+                    'archived_at' => now(),
+                    'gcr_course_state' => 'ARCHIVED'
+                ]);
+                
+                Log::info('Subject auto-archived', [
+                    'subject_id' => $subject->id,
+                    'subject_code' => $subject->subject_code,
+                    'gcr_class_id' => $subject->gcr_class_id
+                ]);
+                
+                return true;
+            }
+            
+            return false;
+        } catch (\Exception $e) {
+            Log::error('Error checking subject archive status', [
+                'subject_id' => $subject->id,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
 }

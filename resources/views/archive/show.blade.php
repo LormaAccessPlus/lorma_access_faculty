@@ -92,9 +92,9 @@
         <div>
             <div class="text-sm text-gray-600 font-medium">Final Rating Formula</div>
             <div class="text-lg font-semibold text-gray-900">
-                FR = (<span class="text-blue-600">{{ $finalRatingConfig['prelim_weight'] }}%</span> × Prelim) + 
-                (<span class="text-green-600">{{ $finalRatingConfig['midterm_weight'] }}%</span> × Midterm) + 
-                (<span class="text-purple-600">{{ $finalRatingConfig['finals_weight'] }}%</span> × Finals)
+                FR = (<span class="text-blue-600">{{ $termWeights['prelim'] }}%</span> × Prelim) + 
+                (<span class="text-green-600">{{ $termWeights['midterm'] }}%</span> × Midterm) + 
+                (<span class="text-purple-600">{{ $termWeights['finals'] }}%</span> × Finals)
             </div>
         </div>
     </div>
@@ -123,16 +123,15 @@
         // Calculate final grades
         $finalGrades = [];
         foreach($subject->studentMappings as $studentMapping) {
-            $studentTermGrades = $termGrades->get($studentMapping->id, collect());
-            $prelim = $studentTermGrades->where('term', 'prelim')->first()?->term_grade;
-            $midterm = $studentTermGrades->where('term', 'midterm')->first()?->term_grade;
-            $finals = $studentTermGrades->where('term', 'finals')->first()?->term_grade;
+            $prelim = $termGrades[$studentMapping->id]['prelim'] ?? 0;
+            $midterm = $termGrades[$studentMapping->id]['midterm'] ?? 0;
+            $finals = $termGrades[$studentMapping->id]['finals'] ?? 0;
             
-            if ($prelim !== null && $midterm !== null && $finals !== null) {
-                $finalRating = ($prelim * ($finalRatingConfig['prelim_weight'] / 100)) +
-                              ($midterm * ($finalRatingConfig['midterm_weight'] / 100)) +
-                              ($finals * ($finalRatingConfig['finals_weight'] / 100));
-                $finalGrades[$studentMapping->id] = round($finalRating, 2);
+            if ($prelim > 0 || $midterm > 0 || $finals > 0) {
+                $finalRating = ($prelim * ($termWeights['prelim'] / 100)) +
+                              ($midterm * ($termWeights['midterm'] / 100)) +
+                              ($finals * ($termWeights['finals'] / 100));
+                $finalGrades[$studentMapping->id] = round($finalRating); // Round to whole number
             } else {
                 $finalGrades[$studentMapping->id] = null;
             }
@@ -170,7 +169,6 @@
                 <tbody class="bg-white divide-y divide-gray-200">
                     @foreach($subject->studentMappings as $index => $studentMapping)
                         @php
-                            $studentTermGrades = $termGrades->get($studentMapping->id, collect());
                             $finalGrade = $finalGrades[$studentMapping->id];
                         @endphp
                         <tr class="hover:bg-gray-50 {{ $index % 2 === 0 ? 'bg-white' : 'bg-gray-25' }}">
@@ -195,18 +193,12 @@
                             <!-- Term Grades -->
                             @foreach($terms as $term)
                                 @php
-                                    $termGrade = $studentTermGrades->where('term', $term)->first();
+                                    $termGradeValue = $termGrades[$studentMapping->id][$term] ?? 0;
                                 @endphp
                                 <td class="px-4 py-3 text-center {{ $termColors[$term]['bg'] }} border-l {{ $termColors[$term]['border'] }}">
-                                    @if($termGrade && $termGrade->term_grade !== null)
-                                        <div class="space-y-1">
-                                            <div class="text-lg font-bold {{ $termColors[$term]['text'] }}">
-                                                {{ number_format($termGrade->term_grade, 2) }}
-                                            </div>
-                                            <div class="text-xs text-gray-500">
-                                                CS: {{ number_format($termGrade->class_standing ?? 0, 1) }} | 
-                                                Ex: {{ number_format($termGrade->exam_grade ?? 0, 1) }}
-                                            </div>
+                                    @if($termGradeValue > 0)
+                                        <div class="text-lg font-bold {{ $termColors[$term]['text'] }}">
+                                            {{ number_format($termGradeValue, 2) }}
                                         </div>
                                     @else
                                         <span class="text-gray-300">—</span>
@@ -217,7 +209,7 @@
                             <!-- Final Rating -->
                             <td class="px-4 py-3 text-center bg-teal-50 border-l-2 border-teal-300">
                                 @if($finalGrade !== null)
-                                    <span class="text-xl font-bold text-teal-900">{{ number_format($finalGrade, 2) }}</span>
+                                    <span class="text-xl font-bold text-teal-900">{{ $finalGrade }}</span>
                                 @else
                                     <span class="text-gray-300">—</span>
                                 @endif

@@ -18,6 +18,7 @@ class GradeMatrixController extends Controller
         
         // Only get subjects from the current semester
         $subjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->with(['studentMappings', 'activities'])
@@ -37,6 +38,7 @@ class GradeMatrixController extends Controller
         
         // Only get subjects from the current semester
         $subjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->with(['studentMappings', 'activities'])
@@ -56,6 +58,7 @@ class GradeMatrixController extends Controller
         
         // Only get subjects from the current semester
         $subjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->with(['studentMappings', 'activities'])
@@ -75,6 +78,7 @@ class GradeMatrixController extends Controller
         
         // Only get subjects from the current semester
         $subjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->with(['studentMappings', 'activities'])

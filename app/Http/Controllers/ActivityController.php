@@ -33,6 +33,7 @@ class ActivityController extends Controller
 
         // Get faculty's subjects for the filter dropdown (current semester only)
         $subjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->orderBy('subject_code')

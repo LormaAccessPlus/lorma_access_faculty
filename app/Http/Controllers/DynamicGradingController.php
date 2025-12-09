@@ -25,14 +25,18 @@ class DynamicGradingController extends Controller
         $currentAcademicYear = config('app.current_academic_year', '2024-2025');
         $currentSemester = config('app.current_semester', '1');
         
-        // Get grading classes for this faculty
+        // Get grading classes for this faculty (only for active subjects)
         $gradingClasses = GradingClass::where('faculty_id', $faculty->id)
+            ->whereHas('subject', function($query) {
+                $query->whereNull('archived_at');
+            })
             ->with(['subject', 'components.items'])
             ->orderBy('created_at', 'desc')
             ->get();
 
         // Get available subjects (not yet added as grading classes)
         $availableSubjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->whereNotIn('id', $gradingClasses->pluck('subject_id'))

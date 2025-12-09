@@ -36,6 +36,7 @@ class ClassroomSyncController extends Controller
         
         // Only get subjects from the current semester
         $subjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->get();
@@ -68,6 +69,7 @@ class ClassroomSyncController extends Controller
             
             // Get all GCR class IDs that are already mapped to subjects
             $mappedGcrClassIds = Subject::where('faculty_id', $faculty->id)
+                ->active()
                 ->whereNotNull('gcr_class_id')
                 ->pluck('gcr_class_id')
                 ->toArray();
@@ -974,6 +976,7 @@ class ClassroomSyncController extends Controller
 
             // Get all connected subjects for this faculty
             $connectedSubjects = Subject::where('faculty_id', $faculty->id)
+                ->active()
                 ->whereNotNull('gcr_class_id')
                 ->get();
 

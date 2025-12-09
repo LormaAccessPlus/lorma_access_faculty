@@ -27,6 +27,7 @@ class DashboardController extends Controller
         
         // Get recent subjects (from current semester only)
         $recentSubjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->with(['activities'])
@@ -63,6 +64,7 @@ class DashboardController extends Controller
     private function getDashboardStats(int $facultyId, string $academicYear, string $semester): array
     {
         $totalSubjects = Subject::where('faculty_id', $facultyId)
+            ->active()
             ->where('academic_year', $academicYear)
             ->where('semester', $semester)
             ->count();
@@ -74,6 +76,7 @@ class DashboardController extends Controller
         })->count();
         
         $connectedSubjects = Subject::where('faculty_id', $facultyId)
+            ->active()
             ->where('academic_year', $academicYear)
             ->where('semester', $semester)
             ->whereNotNull('gcr_class_id')
@@ -120,6 +123,7 @@ class DashboardController extends Controller
     private function getSubjectsNeedingAttention(int $facultyId, string $academicYear, string $semester): array
     {
         $subjects = Subject::where('faculty_id', $facultyId)
+            ->active()
             ->where('academic_year', $academicYear)
             ->where('semester', $semester)
             ->with(['activities', 'studentMappings'])

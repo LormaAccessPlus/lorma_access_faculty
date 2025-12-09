@@ -43,6 +43,7 @@ class SubjectService
         }
 
         return Subject::where('faculty_id', $facultyId)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->with(['activities'])
@@ -79,6 +80,7 @@ class SubjectService
         }
 
         return Subject::where('faculty_id', $facultyId)
+            ->active()
             ->where(function ($query) use ($currentAcademicYear, $currentSemester) {
                 // Get subjects from previous academic years
                 $query->where('academic_year', '!=', $currentAcademicYear)

@@ -28,6 +28,7 @@ class StudentController extends Controller
         
         // Get subjects with student mappings
         $subjects = Subject::where('faculty_id', $faculty->id)
+            ->active()
             ->where('academic_year', $currentAcademicYear)
             ->where('semester', $currentSemester)
             ->with(['studentMappings'])

@@ -32,7 +32,8 @@ class Subject extends Model
         'final_rating_config',
         'final_rating_formula',
         'comprehensive_exam_scores',
-        'matrix_type'
+        'matrix_type',
+        'archived_at',
     ];
 
     protected $casts = [
@@ -41,7 +42,19 @@ class Subject extends Model
         'final_rating_config' => 'array',
         'final_rating_formula' => 'array',
         'comprehensive_exam_scores' => 'array',
+        'archived_at' => 'datetime',
     ];
+
+    // Scopes
+    public function scopeActive($query)
+    {
+        return $query->whereNull('archived_at');
+    }
+
+    public function scopeArchived($query)
+    {
+        return $query->whereNotNull('archived_at');
+    }
 
     public function faculty(): BelongsTo
     {
@@ -68,6 +81,11 @@ class Subject extends Model
     public function matrixComponents(): HasMany
     {
         return $this->hasMany(MatrixComponent::class)->orderBy('order');
+    }
+
+    public function gradingClasses(): HasMany
+    {
+        return $this->hasMany(GradingClass::class);
     }
 
     public function isLectureOnly(): bool

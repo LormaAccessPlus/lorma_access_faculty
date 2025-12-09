@@ -205,5 +205,46 @@
             @endforeach
         </tbody>
     </table>
+
+    @php
+        // Map departments to deans
+        $deans = [
+            'College of Nursing' => 'Teresita A. Ferrer, MAN',
+            'COLLEGE OF PHARMACY' => 'Ellen Mae P. Abiqui, RPh, MSPharm, CPT',
+            'COLLEGE OF MEDICAL LABORATORY SCIENCE' => 'Josephine Milan, RMT, MSME',
+            'COLLEGE OF RADIOLOGIC TECHNOLOGY' => 'Gryn T. Salagma, RRT',
+            'COLLEGE OF PHYSICAL THERAPY' => 'Maverick Kaypee A. Colet, EdD, MASE, PTRP',
+            'COLLEGE OF RESPIRATORY THERAPY' => 'Dr. Guilvic Tirso S. Aspiras, MD, FPCP, FPCC',
+            'COLLEGE OF PSYCHOLOGY' => 'Dr. Rogelio S. Quiroga Jr., Ph.D.',
+            'COLLEGE OF COMPUTER STUDIES & ENGINEERING' => 'Jeoffrey B. Layco, BSICS, MIS',
+            'College of Computer Studies & Engineering' => 'Jeoffrey B. Layco, BSICS, MIS',
+            'COLLEGE OF BUSINESS' => 'Gloria Anne Hombrebueno, MBA / Elizabeth R. Camara, LPT, MAEd',
+        ];
+        
+        // Get the department from the first grading class
+        $department = $gradingClasses->first()->department ?? '';
+        $deanName = $deans[$department] ?? 'Dean Name';
+    @endphp
+
+    <div style="margin-top: 40px;">
+        <table style="width: 100%; border: none;">
+            <tr>
+                <td style="width: 50%; border: none; text-align: center; vertical-align: top; padding: 0;">
+                    <div style="font-size: 10px;">
+                        <strong>Submitted by:</strong><br><br><br>
+                        <strong style="text-decoration: underline;">{{ strtoupper($faculty->name) }}</strong><br>
+                        <span style="font-size: 9px;">Instructor</span>
+                    </div>
+                </td>
+                <td style="width: 50%; border: none; text-align: center; vertical-align: top; padding: 0;">
+                    <div style="font-size: 10px;">
+                        <strong>Noted by:</strong><br><br><br>
+                        <strong style="text-decoration: underline;">{{ strtoupper($deanName) }}</strong><br>
+                        <span style="font-size: 9px;">Dean, {{ $department }}</span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
 </body>
 </html>
