@@ -150,6 +150,11 @@
                         <div class="text-3xl font-bold text-gray-900">0%</div>
                     </div>
                     <div class="flex gap-2">
+                        <a href="{{ route('grading.full-matrix', $subject->id) }}" 
+                                class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                            <i class="fas fa-table mr-2"></i>
+                            Full Matrix
+                        </a>
                         <a href="{{ route('activities.index', ['subject_id' => $subject->id]) }}" 
                                 class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
                             <i class="fas fa-tasks mr-2"></i>
@@ -207,7 +212,7 @@
                                 
                                 @if($hasLecAndLab)
                                     {{-- Split into Lecture and Lab with main header --}}
-                                    <th colspan="{{ $lectureItems->count() + $labItems->count() + 4 }}" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200 bg-blue-50">
+                                    <th colspan="{{ $lectureItems->count() + $labItems->count() + 5 }}" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200 bg-blue-50">
                                         <div class="flex items-center justify-center gap-2">
                                             <span class="text-base font-bold">{{ $component->component_name }}</span>
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -250,6 +255,9 @@
                                     {{-- Laboratory sub-header --}}
                                     <th colspan="{{ $labItems->count() + 2 }}" class="px-3 py-2 text-center text-xs font-bold text-gray-700 uppercase bg-green-100 border-r border-gray-300">
                                         Laboratory
+                                    </th>
+                                    {{-- Class Standing Grade column --}}
+                                    <th class="px-3 py-2 text-center text-xs font-bold text-gray-700 uppercase bg-blue-100 border-r border-gray-300">
                                     </th>
                                 @else
                                     {{-- Empty cell for components without lec/lab split --}}
@@ -312,38 +320,60 @@
                                     <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-green-200 border-r border-gray-200">
                                         Lab Grade
                                     </th>
-                                @else
-                                    {{-- Normal component items --}}
-                                    @foreach($component->items as $item)
-                                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 border-r border-gray-100" style="min-width: 100px;">
-                                            <div class="font-semibold text-gray-700">
-                                                {{ $item->item_name }}
-                                                @if($item->activity_id && optional($item->activity)->gcr_assignment_id)
-                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-blue-500 text-white ml-1">G</span>
-                                                @endif
-                                            </div>
-                                            <div class="text-gray-400 mt-1 flex items-center justify-center gap-1">
-                                                <span id="max-score-display-{{ $item->id }}">/{{ $item->max_score }}</span>
-                                                @if($component->component_type === 'exam')
-                                                    <button type="button" 
-                                                            onclick="editMaxScore({{ $item->id }}, {{ $item->max_score }})"
-                                                            class="text-blue-500 hover:text-blue-700 transition-colors"
-                                                            title="Edit max score">
-                                                        <i class="fas fa-edit text-xs"></i>
-                                                    </button>
-                                                @endif
-                                            </div>
-                                            @if($item->date)
-                                                <div class="text-gray-400 text-xs mt-1">{{ \Carbon\Carbon::parse($item->date)->format('M d') }}</div>
-                                            @endif
-                                        </th>
-                                    @endforeach
-                                    <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-gray-50 border-r border-gray-200">
-                                        Total
-                                    </th>
-                                    <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-gray-100 border-r border-gray-200">
+                                    <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-blue-100 border-r border-gray-200">
                                         {{ $component->component_name }} Grade
                                     </th>
+                                @else
+                                    {{-- Special handling for Exam component --}}
+                                    @if($component->component_name === 'Exam')
+                                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 border-r border-gray-100" style="min-width: 120px;">
+                                            <div class="font-semibold text-gray-700">Exam Score</div>
+                                            <div class="text-gray-400 mt-1 flex items-center justify-center gap-1">
+                                                <span id="exam-max-score-{{ $component->id }}">/{{ $component->exam_max_score ?? 100 }}</span>
+                                                <button type="button" 
+                                                        onclick="editExamMaxScore({{ $component->id }}, {{ $component->exam_max_score ?? 100 }})"
+                                                        class="text-blue-500 hover:text-blue-700 transition-colors"
+                                                        title="Edit max score">
+                                                    <i class="fas fa-edit text-xs"></i>
+                                                </button>
+                                            </div>
+                                        </th>
+                                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-gray-100 border-r border-gray-200">
+                                            {{ $component->component_name }} Grade
+                                        </th>
+                                    @else
+                                        {{-- Normal component items --}}
+                                        @foreach($component->items as $item)
+                                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 border-r border-gray-100" style="min-width: 100px;">
+                                                <div class="font-semibold text-gray-700">
+                                                    {{ $item->item_name }}
+                                                    @if($item->activity_id && optional($item->activity)->gcr_assignment_id)
+                                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-blue-500 text-white ml-1">G</span>
+                                                    @endif
+                                                </div>
+                                                <div class="text-gray-400 mt-1 flex items-center justify-center gap-1">
+                                                    <span id="max-score-display-{{ $item->id }}">/{{ $item->max_score }}</span>
+                                                    @if($component->component_type === 'exam')
+                                                        <button type="button" 
+                                                                onclick="editMaxScore({{ $item->id }}, {{ $item->max_score }})"
+                                                                class="text-blue-500 hover:text-blue-700 transition-colors"
+                                                                title="Edit max score">
+                                                            <i class="fas fa-edit text-xs"></i>
+                                                        </button>
+                                                    @endif
+                                                </div>
+                                                @if($item->date)
+                                                    <div class="text-gray-400 text-xs mt-1">{{ \Carbon\Carbon::parse($item->date)->format('M d') }}</div>
+                                                @endif
+                                            </th>
+                                        @endforeach
+                                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-gray-50 border-r border-gray-200">
+                                            Total
+                                        </th>
+                                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-gray-100 border-r border-gray-200">
+                                            {{ $component->component_name }} Grade
+                                        </th>
+                                    @endif
                                 @endif
                             @endforeach
                         </tr>
@@ -472,6 +502,7 @@
                                         @php
                                             // Average lecture and lab for term grade calculation
                                             $totalCount = $lecComponentCount + $labComponentCount;
+                                            $combinedAvg = 0;
                                             if ($totalCount > 0) {
                                                 $lecAvg = $lecComponentCount > 0 ? ($lecComponentTotal / $lecComponentCount) : 0;
                                                 $labAvg = $labComponentCount > 0 ? ($labComponentTotal / $labComponentCount) : 0;
@@ -479,62 +510,110 @@
                                                 $termGradeComponents[] = $combinedAvg * ($component->weight_percentage / 100);
                                             }
                                         @endphp
-                                    @else
-                                        {{-- Normal Component (no split) --}}
-                                        @php
-                                            $rawTotal = 0;
-                                            $componentTotal = 0;
-                                            $componentCount = 0;
-                                        @endphp
-                                        @foreach($component->items as $item)
-                                            @php
-                                                $grade = $item->grades->where('student_mapping_id', $student->id)->first();
-                                                $isGCR = $item->activity_id && optional($item->activity)->gcr_assignment_id;
-                                            @endphp
-                                            <td class="px-3 py-4 text-center border-r border-gray-100">
-                                                <input type="number" 
-                                                       class="grade-input w-20 px-2 py-1 text-center border rounded-lg transition-colors {{ $isGCR ? 'bg-blue-50 border-blue-300 cursor-not-allowed' : 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500' }}" 
-                                                       data-grading-class="{{ $gradingClass->id }}"
-                                                       data-student="{{ $student->id }}"
-                                                       data-item="{{ $item->id }}"
-                                                       value="{{ $grade->score ?? '' }}"
-                                                       min="0" 
-                                                       max="{{ $item->max_score }}"
-                                                       step="0.01"
-                                                       placeholder="0"
-                                                       {{ $isGCR ? 'readonly' : '' }}
-                                                       title="{{ $isGCR ? 'This grade is from Google Classroom and cannot be edited manually' : '' }}">
-                                            </td>
-                                            @php
-                                                if ($grade && $grade->score !== null) {
-                                                    $rawTotal += $grade->score;
-                                                }
-                                                if ($grade && $grade->computed_score !== null) {
-                                                    $componentTotal += $grade->computed_score;
-                                                    $componentCount++;
-                                                }
-                                            @endphp
-                                        @endforeach
-                                        <td class="px-3 py-4 text-center bg-gray-50 border-r border-gray-200">
-                                            <span class="text-sm font-semibold text-gray-700">
-                                                {{ number_format($rawTotal, 2) }}
-                                            </span>
-                                        </td>
-                                        <td class="px-3 py-4 text-center bg-gray-100 border-r border-gray-200" data-component-weight="{{ $component->weight_percentage }}" data-component-id="{{ $component->id }}">
-                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold {{ $componentCount > 0 ? 'bg-blue-100 text-blue-800' : 'text-gray-400' }}">
-                                                @if($componentCount > 0)
-                                                    {{ number_format($componentTotal / $componentCount, 2) }}
+                                        <td class="px-3 py-4 text-center bg-blue-100 border-r border-gray-200">
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold {{ $totalCount > 0 ? 'bg-blue-600 text-white' : 'text-gray-400' }}">
+                                                @if($totalCount > 0)
+                                                    {{ number_format($combinedAvg, 2) }}
                                                 @else
                                                     -
                                                 @endif
                                             </span>
                                         </td>
-                                        @php
-                                            if ($componentCount > 0) {
-                                                $avg = $componentTotal / $componentCount;
-                                                $termGradeComponents[] = $avg * ($component->weight_percentage / 100);
-                                            }
-                                        @endphp
+                                    @else
+                                        {{-- Special handling for Exam component --}}
+                                        @if($component->component_name === 'Exam')
+                                            @php
+                                                $examGrade = \App\Models\StudentGrade::where('grading_class_id', $gradingClass->id)
+                                                    ->where('student_mapping_id', $student->id)
+                                                    ->where('component_id', $component->id)
+                                                    ->first();
+                                                $examMaxScore = $component->exam_max_score ?? 100;
+                                                $examScore = $examGrade->exam_score ?? null;
+                                                $examComputedScore = $examScore !== null ? ($examScore / $examMaxScore) * 100 : null;
+                                            @endphp
+                                            <td class="px-3 py-4 text-center border-r border-gray-100">
+                                                <input type="number" 
+                                                       class="exam-input w-20 px-2 py-1 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                                                       data-grading-class="{{ $gradingClass->id }}"
+                                                       data-student="{{ $student->id }}"
+                                                       data-component="{{ $component->id }}"
+                                                       value="{{ $examScore ?? '' }}"
+                                                       min="0" 
+                                                       max="{{ $examMaxScore }}"
+                                                       step="0.01"
+                                                       placeholder="0">
+                                            </td>
+                                            <td class="px-3 py-4 text-center bg-gray-100 border-r border-gray-200">
+                                                <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold {{ $examComputedScore !== null ? 'bg-blue-600 text-white' : 'text-gray-400' }}">
+                                                    @if($examComputedScore !== null)
+                                                        {{ number_format($examComputedScore, 2) }}
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </span>
+                                            </td>
+                                            @php
+                                                if ($examComputedScore !== null) {
+                                                    $termGradeComponents[] = $examComputedScore * ($component->weight_percentage / 100);
+                                                }
+                                            @endphp
+                                        @else
+                                            {{-- Normal Component (no split) --}}
+                                            @php
+                                                $rawTotal = 0;
+                                                $componentTotal = 0;
+                                                $componentCount = 0;
+                                            @endphp
+                                            @foreach($component->items as $item)
+                                                @php
+                                                    $grade = $item->grades->where('student_mapping_id', $student->id)->first();
+                                                    $isGCR = $item->activity_id && optional($item->activity)->gcr_assignment_id;
+                                                @endphp
+                                                <td class="px-3 py-4 text-center border-r border-gray-100">
+                                                    <input type="number" 
+                                                           class="grade-input w-20 px-2 py-1 text-center border rounded-lg transition-colors {{ $isGCR ? 'bg-blue-50 border-blue-300 cursor-not-allowed' : 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500' }}" 
+                                                           data-grading-class="{{ $gradingClass->id }}"
+                                                           data-student="{{ $student->id }}"
+                                                           data-item="{{ $item->id }}"
+                                                           value="{{ $grade->score ?? '' }}"
+                                                           min="0" 
+                                                           max="{{ $item->max_score }}"
+                                                           step="0.01"
+                                                           placeholder="0"
+                                                           {{ $isGCR ? 'readonly' : '' }}
+                                                           title="{{ $isGCR ? 'This grade is from Google Classroom and cannot be edited manually' : '' }}">
+                                                </td>
+                                                @php
+                                                    if ($grade && $grade->score !== null) {
+                                                        $rawTotal += $grade->score;
+                                                    }
+                                                    if ($grade && $grade->computed_score !== null) {
+                                                        $componentTotal += $grade->computed_score;
+                                                        $componentCount++;
+                                                    }
+                                                @endphp
+                                            @endforeach
+                                            <td class="px-3 py-4 text-center bg-gray-50 border-r border-gray-200">
+                                                <span class="text-sm font-semibold text-gray-700">
+                                                    {{ number_format($rawTotal, 2) }}
+                                                </span>
+                                            </td>
+                                            <td class="px-3 py-4 text-center bg-gray-100 border-r border-gray-200" data-component-weight="{{ $component->weight_percentage }}" data-component-id="{{ $component->id }}">
+                                                <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold {{ $componentCount > 0 ? 'bg-blue-100 text-blue-800' : 'text-gray-400' }}">
+                                                    @if($componentCount > 0)
+                                                        {{ number_format($componentTotal / $componentCount, 2) }}
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </span>
+                                            </td>
+                                            @php
+                                                if ($componentCount > 0) {
+                                                    $avg = $componentTotal / $componentCount;
+                                                    $termGradeComponents[] = $avg * ($component->weight_percentage / 100);
+                                                }
+                                            @endphp
+                                        @endif
                                     @endif
                                 @endforeach
                                 <td class="px-6 py-4 text-center bg-blue-50">
@@ -696,11 +775,17 @@ if (document.getElementById('component_id').value) {
 }
 
 // Restore scroll position after reload
-const scrollPos = sessionStorage.getItem('scrollPosition');
-if (scrollPos) {
-    window.scrollTo(0, parseInt(scrollPos));
-    sessionStorage.removeItem('scrollPosition');
-}
+document.addEventListener('DOMContentLoaded', function() {
+    const scrollPos = sessionStorage.getItem('scrollPosition');
+    console.log('Restoring scroll position:', scrollPos);
+    if (scrollPos) {
+        setTimeout(() => {
+            console.log('Scrolling to:', scrollPos);
+            window.scrollTo(0, parseInt(scrollPos));
+            sessionStorage.removeItem('scrollPosition');
+        }, 100);
+    }
+});
 
 // Restore focus to the input that was edited
 const lastStudent = sessionStorage.getItem('lastEditedStudent');
@@ -734,6 +819,27 @@ document.querySelectorAll('.grade-input').forEach(input => {
             clearTimeout(timeout);
             this.classList.add('saving');
             saveGrade(this);
+        }
+    });
+});
+
+// Auto-save exam scores
+document.querySelectorAll('.exam-input').forEach(input => {
+    let timeout;
+    input.addEventListener('input', function() {
+        clearTimeout(timeout);
+        this.classList.add('saving');
+        timeout = setTimeout(() => {
+            saveExamScore(this);
+        }, 800);
+    });
+    
+    // Save on Enter key
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            clearTimeout(timeout);
+            this.classList.add('saving');
+            saveExamScore(this);
         }
     });
 });
@@ -937,6 +1043,108 @@ function editMaxScore(itemId, currentMaxScore) {
     .catch(error => {
         console.error('Error:', error);
         alert('Error updating max score');
+    });
+}
+
+function editExamMaxScore(componentId, currentMaxScore) {
+    const newMaxScore = prompt(`Edit exam max score:\n\nCurrent max score: ${currentMaxScore}`, currentMaxScore);
+    
+    if (newMaxScore === null || newMaxScore === '') {
+        return;
+    }
+    
+    const maxScore = parseFloat(newMaxScore);
+    if (isNaN(maxScore) || maxScore <= 0) {
+        alert('Please enter a valid positive number');
+        return;
+    }
+    
+    // Update exam max score via AJAX
+    fetch(`/grading/component/${componentId}/update-exam-max-score`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ exam_max_score: maxScore })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Exam max score updated successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + (data.message || 'Failed to update exam max score'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating exam max score');
+    });
+}
+
+function saveExamScore(input) {
+    console.log('Saving exam score...', input.dataset);
+    
+    const data = {
+        grading_class_id: input.dataset.gradingClass,
+        student_mapping_id: input.dataset.student,
+        component_id: input.dataset.component,
+        exam_score: input.value || null,
+        _token: '{{ csrf_token() }}'
+    };
+    
+    console.log('Data to send:', data);
+
+    fetch('{{ route("grading.save-exam-score") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            return response.text().then(text => {
+                console.error('Error response:', text);
+                throw new Error('HTTP error ' + response.status);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response data:', data);
+        if (data.success) {
+            input.classList.remove('saving');
+            input.classList.add('saved');
+            
+            // Save scroll position before reload
+            const scrollY = window.pageYOffset || window.scrollY || document.documentElement.scrollTop;
+            console.log('Saving scroll position:', scrollY);
+            sessionStorage.setItem('scrollPosition', scrollY);
+            
+            setTimeout(() => {
+                location.reload();
+            }, 300);
+        } else {
+            input.classList.remove('saving');
+            input.classList.add('error');
+            alert('Error: ' + (data.message || 'Failed to save exam score'));
+            setTimeout(() => {
+                input.classList.remove('error');
+            }, 2000);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving exam score:', error);
+        alert('Error: ' + error.message);
+        input.classList.remove('saving');
+        input.classList.add('error');
+        setTimeout(() => {
+            input.classList.remove('error');
+        }, 2000);
     });
 }
 </script>

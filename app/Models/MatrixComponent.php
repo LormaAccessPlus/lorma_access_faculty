@@ -7,32 +7,30 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-class GradingComponent extends Model
+class MatrixComponent extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'grading_class_id',
+        'subject_id',
         'component_name',
-        'component_type',
-        'weight_percentage',
+        'max_score',
         'formula',
-        'exam_max_score',
         'order',
     ];
 
     protected $casts = [
-        'weight_percentage' => 'decimal:2',
+        'max_score' => 'decimal:2',
         'order' => 'integer',
     ];
 
-    public function gradingClass(): BelongsTo
+    public function subject(): BelongsTo
     {
-        return $this->belongsTo(GradingClass::class);
+        return $this->belongsTo(Subject::class);
     }
 
-    public function items(): HasMany
+    public function scores(): HasMany
     {
-        return $this->hasMany(ComponentItem::class, 'component_id');
+        return $this->hasMany(MatrixComponentScore::class);
     }
 }

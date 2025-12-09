@@ -30,6 +30,7 @@ class Subject extends Model
         'student_mappings_count',
         'mapping_notes',
         'final_rating_config',
+        'final_rating_formula',
         'comprehensive_exam_scores',
         'matrix_type'
     ];
@@ -38,6 +39,7 @@ class Subject extends Model
         'school_subject_id' => 'integer',
         'faculty_id' => 'integer',
         'final_rating_config' => 'array',
+        'final_rating_formula' => 'array',
         'comprehensive_exam_scores' => 'array',
     ];
 
@@ -61,6 +63,11 @@ class Subject extends Model
         return $this->belongsToMany(Student::class, 'student_subject')
             ->withPivot('status')
             ->withTimestamps();
+    }
+
+    public function matrixComponents(): HasMany
+    {
+        return $this->hasMany(MatrixComponent::class)->orderBy('order');
     }
 
     public function isLectureOnly(): bool

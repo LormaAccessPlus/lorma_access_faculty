@@ -17,12 +17,16 @@ class StudentMapping extends Model
         'student_name',
         'student_email',
         'mapping_confidence',
+        'csv_data',
+        'auto_matched',
     ];
 
     protected $casts = [
         'subject_id' => 'integer',
         'student_id' => 'integer',
         'mapping_confidence' => 'decimal:2',
+        'csv_data' => 'array',
+        'auto_matched' => 'boolean',
     ];
 
     public function subject(): BelongsTo

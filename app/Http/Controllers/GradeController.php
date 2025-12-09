@@ -1064,8 +1064,10 @@ class GradeController extends Controller
                 ], 422);
             }
 
-            // Get student mappings
-            $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
+            // Get student mappings (only matched students)
+            $studentMappings = StudentMapping::where('subject_id', $subject->id)
+                ->whereNotNull('gcr_student_id')
+                ->get();
             if ($studentMappings->isEmpty()) {
                 return response()->json([
                     'success' => false,
@@ -1408,8 +1410,10 @@ class GradeController extends Controller
         $classStandingWeight = $gradingConfig->class_standing_weight;
         $examWeight = $gradingConfig->exam_weight;
 
-        // Get all student mappings for this subject
-        $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
+        // Get all student mappings for this subject (only matched students)
+        $studentMappings = StudentMapping::where('subject_id', $subject->id)
+            ->whereNotNull('gcr_student_id')
+            ->get();
 
         foreach ($studentMappings as $studentMapping) {
             // Recalculate class standing for this student and term
@@ -1445,8 +1449,10 @@ class GradeController extends Controller
         $midtermWeight = $config['midterm_weight'];
         $finalsWeight = $config['finals_weight'];
 
-        // Get all student mappings for this subject
-        $studentMappings = StudentMapping::where('subject_id', $subject->id)->get();
+        // Get all student mappings for this subject (only matched students)
+        $studentMappings = StudentMapping::where('subject_id', $subject->id)
+            ->whereNotNull('gcr_student_id')
+            ->get();
 
         foreach ($studentMappings as $studentMapping) {
             // Get term grades for this student

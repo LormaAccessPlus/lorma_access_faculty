@@ -219,7 +219,7 @@ class StudentController extends Controller
                         'student_id' => $student['school_student_id'],
                         'gcr_student_id' => $student['match_result']['gcr_student_id'],
                         'mapping_confidence' => $student['match_result']['confidence'],
-                        'csv_data' => json_encode($student['csv_data']),
+                        'csv_data' => $student['csv_data'], // Let the model cast handle JSON encoding
                         'auto_matched' => $student['match_result']['matched'],
                     ]
                 );

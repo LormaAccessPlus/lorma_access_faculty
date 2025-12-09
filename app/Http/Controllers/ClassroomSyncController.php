@@ -924,6 +924,7 @@ class ClassroomSyncController extends Controller
 
         if (!$gradingClass) return;
 
+        // Try to find matching component by name
         $componentName = match($activity->activity_category) {
             'quiz' => 'Quizzes',
             'activity' => 'Activities',
@@ -931,7 +932,20 @@ class ClassroomSyncController extends Controller
         };
 
         $component = $gradingClass->components()->where('component_name', $componentName)->first();
+        
+        // If no matching component, try to add to "Class Standing" component
+        if (!$component) {
+            $component = $gradingClass->components()->where('component_name', 'Class Standing')->first();
+        }
+        
         if (!$component) return;
+
+        // Check if item already exists
+        $existingItem = \App\Models\ComponentItem::where('component_id', $component->id)
+            ->where('activity_id', $activity->id)
+            ->first();
+            
+        if ($existingItem) return;
 
         \App\Models\ComponentItem::create([
             'component_id' => $component->id,
