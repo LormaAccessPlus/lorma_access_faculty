@@ -205,6 +205,7 @@ Route::middleware(['auth.faculty'])->group(function () {
     // Archive Routes
     Route::prefix('archive')->name('archive.')->group(function () {
         Route::get('/', [ArchiveController::class, 'index'])->name('index');
+        Route::post('/sync', [ArchiveController::class, 'sync'])->name('sync');
         Route::get('/{subject}', [ArchiveController::class, 'show'])->name('show');
     });
     

@@ -24,27 +24,7 @@
                         <a href="{{ route('subjects.index') }}" class="hover:text-blue-200">Subjects</a>
                         <a href="{{ route('classroom.index') }}" class="hover:text-blue-200">Google Classroom</a>
                         
-                        <!-- Grade Matrix Dropdown -->
-                        <div class="relative dropdown">
-                            <button class="hover:text-blue-200 flex items-center space-x-1" onclick="toggleDropdown(event)">
-                                <span>Grade Matrix</span>
-                                <i class="fas fa-chevron-down text-xs"></i>
-                            </button>
-                            <div class="dropdown-menu hidden absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg z-50">
-                                <a href="{{ route('grade-matrix.zero-based') }}" class="block px-4 py-2 text-gray-800 hover:bg-blue-50">
-                                    <i class="fas fa-table mr-2"></i>Zero-based Matrix
-                                </a>
-                                <a href="{{ route('grade-matrix.nursing') }}" class="block px-4 py-2 text-gray-800 hover:bg-blue-50">
-                                    <i class="fas fa-heartbeat mr-2"></i>Nursing Matrix
-                                </a>
-                                <a href="{{ route('grade-matrix.general-education') }}" class="block px-4 py-2 text-gray-800 hover:bg-blue-50">
-                                    <i class="fas fa-graduation-cap mr-2"></i>General Education Matrix
-                                </a>
-                                <a href="{{ route('grade-matrix.customized') }}" class="block px-4 py-2 text-gray-800 hover:bg-blue-50">
-                                    <i class="fas fa-cog mr-2"></i>Customized Matrix
-                                </a>
-                            </div>
-                        </div>
+
                     </div>
                 @endauth
             </div>

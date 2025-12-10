@@ -21,7 +21,12 @@
                     View subjects that have been archived in Google Classroom. Grades are read-only but can still be exported.
                 </p>
             </div>
-            <div class="mt-4 sm:mt-0">
+            <div class="mt-4 sm:mt-0 flex gap-3">
+                <button onclick="syncArchives()" 
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    Sync Archives
+                </button>
                 <a href="{{ route('dashboard') }}" 
                    class="inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md bg-white transition-colors"
                    style="border-color: #08695A; color: #08695A;"
@@ -127,4 +132,48 @@
         @endforeach
     </div>
 @endif
+
+<script>
+async function syncArchives() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
+    
+    try {
+        const response = await fetch('{{ route("archive.sync") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Show success message
+            if (data.archived_count > 0) {
+                alert(`Success! ${data.archived_count} subject(s) have been archived and moved from other pages.`);
+                // Reload the page to show newly archived subjects
+                window.location.reload();
+            } else {
+                alert('Sync complete! No new archived subjects found.');
+            }
+        } else {
+            alert('Error: ' + (data.message || 'Failed to sync archives'));
+        }
+    } catch (error) {
+        console.error('Sync error:', error);
+        alert('Error: Failed to sync archives. Please try again.');
+    } finally {
+        // Restore button state
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
+}
+</script>
+
 @endsection

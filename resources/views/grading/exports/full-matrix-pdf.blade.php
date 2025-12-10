@@ -219,6 +219,8 @@
             'COLLEGE OF COMPUTER STUDIES & ENGINEERING' => 'Jeoffrey B. Layco, BSICS, MIS',
             'College of Computer Studies & Engineering' => 'Jeoffrey B. Layco, BSICS, MIS',
             'COLLEGE OF BUSINESS' => 'Gloria Anne Hombrebueno, MBA / Elizabeth R. Camara, LPT, MAEd',
+            'GENERAL EDUCATION' => 'Elizabeth R. Camara, LPT, MAEd',
+            'General Education' => 'Elizabeth R. Camara, LPT, MAEd',
         ];
         
         // Get the department from the first grading class

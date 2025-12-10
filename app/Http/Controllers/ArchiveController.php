@@ -134,4 +134,64 @@ class ArchiveController extends Controller
         
         return $termGrade;
     }
+
+    /**
+     * Sync archived subjects from Google Classroom
+     */
+    public function sync(Request $request)
+    {
+        $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
+        
+        try {
+            // Get all active subjects with GCR connections for this faculty
+            $subjects = Subject::where('faculty_id', $faculty->id)
+                ->whereNotNull('gcr_class_id')
+                ->whereNull('archived_at')
+                ->get();
+
+            if ($subjects->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'archived_count' => 0,
+                    'message' => 'No connected subjects found to check.'
+                ]);
+            }
+
+            $classroomService = app(\App\Services\GoogleClassroomService::class);
+            
+            // Try to authenticate with faculty's Google account
+            if (!$classroomService->authenticateWithFaculty($faculty)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Could not authenticate with Google Classroom. Please check your connection.'
+                ]);
+            }
+
+            $archivedCount = 0;
+            foreach ($subjects as $subject) {
+                if ($classroomService->checkAndArchiveSubject($subject)) {
+                    $archivedCount++;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'archived_count' => $archivedCount,
+                'message' => $archivedCount > 0 
+                    ? "Successfully archived {$archivedCount} subject(s)."
+                    : 'No new archived subjects found.'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Archive sync failed', [
+                'faculty_id' => $faculty->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Sync failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

@@ -527,9 +527,10 @@
                                                     ->where('student_mapping_id', $student->id)
                                                     ->where('component_id', $component->id)
                                                     ->first();
-                                                $examMaxScore = $component->exam_max_score ?? 100;
+                                                $examMaxScore = $examGrade->max_score ?? $component->exam_max_score ?? 100;
                                                 $examScore = $examGrade->exam_score ?? null;
-                                                $examComputedScore = $examScore !== null ? ($examScore / $examMaxScore) * 100 : null;
+                                                // Use the computed_score from database (which applies the configured formula)
+                                                $examComputedScore = $examGrade->computed_score ?? null;
                                             @endphp
                                             <td class="px-3 py-4 text-center border-r border-gray-100">
                                                 <input type="number" 
@@ -743,6 +744,25 @@
 }
 
 .grade-input.error {
+    border-color: #EF4444;
+    background-color: #FEE2E2;
+}
+
+.exam-input:focus {
+    outline: none;
+}
+
+.exam-input.saving {
+    border-color: #FCD34D;
+    background-color: #FEF3C7;
+}
+
+.exam-input.saved {
+    border-color: #10B981;
+    background-color: #D1FAE5;
+}
+
+.exam-input.error {
     border-color: #EF4444;
     background-color: #FEE2E2;
 }
@@ -1091,6 +1111,7 @@ function saveExamScore(input) {
         student_mapping_id: input.dataset.student,
         component_id: input.dataset.component,
         exam_score: input.value || null,
+        exam_max_score: input.max || 100,
         _token: '{{ csrf_token() }}'
     };
     

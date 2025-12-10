@@ -7,23 +7,10 @@
     <div class="max-w-6xl mx-auto">
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Google Classroom Integration</h1>
-            <div class="flex space-x-3">
-                <button id="syncArchiveStatus" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg">
-                    <i class="fas fa-sync-alt mr-2"></i>Sync Archive Status
-                </button>
-                <button id="testConnection" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                    Test Connection
-                </button>
-            </div>
+
         </div>
 
-        <!-- Connection Status -->
-        <div id="connectionStatus" class="mb-6 p-4 rounded-lg hidden">
-            <div class="flex items-center">
-                <div id="statusIcon" class="mr-3"></div>
-                <span id="statusMessage"></span>
-            </div>
-        </div>
+
 
         <!-- Connected Subjects -->
         <div class="bg-white rounded-lg shadow-md mb-8">
@@ -193,47 +180,7 @@
 <script>
 let currentSubjectId = null;
 
-// Test Google Classroom connection
-document.getElementById('testConnection').addEventListener('click', function() {
-    const button = this;
-    const originalText = button.textContent;
-    button.textContent = 'Testing...';
-    button.disabled = true;
 
-    fetch('/classroom/test-connection', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        showConnectionStatus(data.success, data.message);
-    })
-    .catch(error => {
-        showConnectionStatus(false, 'Connection test failed');
-    })
-    .finally(() => {
-        button.textContent = originalText;
-        button.disabled = false;
-    });
-});
-
-function showConnectionStatus(success, message) {
-    const statusDiv = document.getElementById('connectionStatus');
-    const statusIcon = document.getElementById('statusIcon');
-    const statusMessage = document.getElementById('statusMessage');
-
-    statusDiv.className = `mb-6 p-4 rounded-lg ${success ? 'bg-green-100 border border-green-200' : 'bg-red-100 border border-red-200'}`;
-    statusIcon.innerHTML = success ? '<i class="fas fa-check-circle text-green-600"></i>' : '<i class="fas fa-times-circle text-red-600"></i>';
-    statusMessage.textContent = message;
-    statusDiv.classList.remove('hidden');
-
-    setTimeout(() => {
-        statusDiv.classList.add('hidden');
-    }, 5000);
-}
 
 function showConnectModal(subjectId, subjectCode, subjectName) {
     currentSubjectId = subjectId;
@@ -447,43 +394,6 @@ function closeDetailsModal() {
     document.getElementById('detailsModal').classList.add('hidden');
 }
 
-// Sync Archive Status from Google Classroom
-document.getElementById('syncArchiveStatus').addEventListener('click', function() {
-    const button = this;
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
-    button.disabled = true;
-    
-    fetch('/classroom/sync-course-states', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            let message = data.message;
-            if (data.archived_count > 0) {
-                message += '\n\nArchived subjects have been moved to the Archive page.';
-            }
-            alert(message);
-            if (data.synced_count > 0) {
-                location.reload();
-            }
-        } else {
-            alert('Error: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Sync error:', error);
-        alert('Failed to sync archive status');
-    })
-    .finally(() => {
-        button.innerHTML = originalText;
-        button.disabled = false;
-    });
-});
+
 </script>
 @endsection

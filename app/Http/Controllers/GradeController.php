@@ -544,13 +544,67 @@ class GradeController extends Controller
                 $quizzesMax += floatval($quiz->max_score);
             }
 
-            // Use nursing calculator
-            $calculator = new \App\Services\NursingGradeCalculator();
+            // Get the subject and its grading configuration
+            $subject = Subject::find($request->subject_id);
+            $gradingClass = $subject->gradingClasses()->where('term', $request->term)->first();
             
-            $activitiesScore = $calculator->calculateActivityScore($activitiesTotal, $activitiesMax);
-            $quizzesScore = $calculator->calculateQuizScore($quizzesTotal, $quizzesMax);
-            $examGrade = $calculator->calculateExamScore($request->exam_score ?? 0, $request->exam_max_score ?? 100);
-            $termGradeValue = $calculator->calculateTermGrade($activitiesScore, $quizzesScore, $examGrade);
+            if (!$gradingClass) {
+                return response()->json(['success' => false, 'message' => 'No grading configuration found for this term.'], 400);
+            }
+            
+            // Calculate component scores using configured formulas and weights
+            $termGradeValue = 0;
+            $examGrade = 0;
+            
+            foreach ($gradingClass->components as $component) {
+                if ($component->component_type === 'activity') {
+                    // Apply formula if configured, otherwise use default percentage
+                    if ($component->formula && $activitiesMax > 0) {
+                        $formula = str_replace(['score', 'total'], [$activitiesTotal, $activitiesMax], $component->formula);
+                        try {
+                            $rawScore = eval("return {$formula};");
+                        } catch (\Exception $e) {
+                            $rawScore = ($activitiesTotal / $activitiesMax) * 100;
+                        }
+                    } else {
+                        $rawScore = $activitiesMax > 0 ? ($activitiesTotal / $activitiesMax) * 100 : 0;
+                    }
+                    $termGradeValue += $rawScore * ($component->weight_percentage / 100);
+                    
+                } elseif ($component->component_type === 'quiz') {
+                    // Apply formula if configured, otherwise use default percentage
+                    if ($component->formula && $quizzesMax > 0) {
+                        $formula = str_replace(['score', 'total'], [$quizzesTotal, $quizzesMax], $component->formula);
+                        try {
+                            $rawScore = eval("return {$formula};");
+                        } catch (\Exception $e) {
+                            $rawScore = ($quizzesTotal / $quizzesMax) * 100;
+                        }
+                    } else {
+                        $rawScore = $quizzesMax > 0 ? ($quizzesTotal / $quizzesMax) * 100 : 0;
+                    }
+                    $termGradeValue += $rawScore * ($component->weight_percentage / 100);
+                    
+                } elseif ($component->component_type === 'exam') {
+                    $examScore = $request->exam_score ?? 0;
+                    $examMaxScore = $request->exam_max_score ?? 100;
+                    
+                    // Apply formula if configured, otherwise use default percentage
+                    if ($component->formula && $examMaxScore > 0) {
+                        $formula = str_replace(['score', 'total'], [$examScore, $examMaxScore], $component->formula);
+                        try {
+                            $examGrade = eval("return {$formula};");
+                        } catch (\Exception $e) {
+                            $examGrade = ($examScore / $examMaxScore) * 100;
+                        }
+                    } else {
+                        $examGrade = $examMaxScore > 0 ? ($examScore / $examMaxScore) * 100 : 0;
+                    }
+                    
+                    // Add weighted exam score to term grade
+                    $termGradeValue += $examGrade * ($component->weight_percentage / 100);
+                }
+            }
 
             // Update or create term grade record
             $termGrade = TermGrade::updateOrCreate(
@@ -755,11 +809,11 @@ class GradeController extends Controller
         // Example: 63.45 (weighted CS) + 28.89 (weighted exam) = 92.34
         $termGradeValue = ($termGrade->class_standing ?? 0) + $weightedExamGrade;
 
-        // Store the WEIGHTED exam grade (after applying weight) in exam_grade for display
-        // This shows the weighted contribution to the term grade
-        // Example: For zero-based with 90/100 exam: (90/100)*100 = 90, then 90 × 60% = 54 (displayed as Exam Grade)
+        // Store the RAW transmuted exam score (before applying weight) in exam_grade for display
+        // This shows the actual transmuted score using the formula: score/total*60+40
+        // Example: For exam 50/60: (50/60)*60+40 = 90 (displayed as Exam Grade)
         $termGrade->update([
-            'exam_grade' => $termGrade->exam_score !== null ? round($weightedExamGrade, 2) : null,
+            'exam_grade' => $termGrade->exam_score !== null ? round($rawExamScore, 2) : null,
             'term_grade' => round($termGradeValue, 2),
         ]);
 
@@ -941,11 +995,13 @@ class GradeController extends Controller
             $quizzesMax += floatval($quiz->max_score);
         }
 
-        // Use nursing calculator
-        $calculator = new \App\Services\NursingGradeCalculator();
+        // Get the subject and its grading configuration
+        $subject = Subject::find($studentMapping->subject_id);
+        $gradingClass = $subject->gradingClasses()->where('term', $term)->first();
         
-        $activitiesScore = $calculator->calculateActivityScore($activitiesTotal, $activitiesMax);
-        $quizzesScore = $calculator->calculateQuizScore($quizzesTotal, $quizzesMax);
+        if (!$gradingClass) {
+            return; // Skip if no grading configuration found
+        }
 
         // Get existing term grade to preserve exam score
         $existingTermGrade = TermGrade::where('student_mapping_id', $studentMapping->id)
@@ -956,8 +1012,56 @@ class GradeController extends Controller
         $examScore = $existingTermGrade?->exam_score ?? 0;
         $examMaxScore = $existingTermGrade?->exam_max_score ?? 100;
         
-        $examGrade = $calculator->calculateExamScore($examScore, $examMaxScore);
-        $termGrade = $calculator->calculateTermGrade($activitiesScore, $quizzesScore, $examGrade);
+        // Calculate component scores using configured formulas and weights
+        $termGrade = 0;
+        $examGrade = 0;
+        
+        foreach ($gradingClass->components as $component) {
+            if ($component->component_type === 'activity') {
+                // Apply formula if configured, otherwise use default percentage
+                if ($component->formula && $activitiesMax > 0) {
+                    $formula = str_replace(['score', 'total'], [$activitiesTotal, $activitiesMax], $component->formula);
+                    try {
+                        $rawScore = eval("return {$formula};");
+                    } catch (\Exception $e) {
+                        $rawScore = ($activitiesTotal / $activitiesMax) * 100;
+                    }
+                } else {
+                    $rawScore = $activitiesMax > 0 ? ($activitiesTotal / $activitiesMax) * 100 : 0;
+                }
+                $termGrade += $rawScore * ($component->weight_percentage / 100);
+                
+            } elseif ($component->component_type === 'quiz') {
+                // Apply formula if configured, otherwise use default percentage
+                if ($component->formula && $quizzesMax > 0) {
+                    $formula = str_replace(['score', 'total'], [$quizzesTotal, $quizzesMax], $component->formula);
+                    try {
+                        $rawScore = eval("return {$formula};");
+                    } catch (\Exception $e) {
+                        $rawScore = ($quizzesTotal / $quizzesMax) * 100;
+                    }
+                } else {
+                    $rawScore = $quizzesMax > 0 ? ($quizzesTotal / $quizzesMax) * 100 : 0;
+                }
+                $termGrade += $rawScore * ($component->weight_percentage / 100);
+                
+            } elseif ($component->component_type === 'exam') {
+                // Apply formula if configured, otherwise use default percentage
+                if ($component->formula && $examMaxScore > 0) {
+                    $formula = str_replace(['score', 'total'], [$examScore, $examMaxScore], $component->formula);
+                    try {
+                        $examGrade = eval("return {$formula};");
+                    } catch (\Exception $e) {
+                        $examGrade = ($examScore / $examMaxScore) * 100;
+                    }
+                } else {
+                    $examGrade = $examMaxScore > 0 ? ($examScore / $examMaxScore) * 100 : 0;
+                }
+                
+                // Add weighted exam score to term grade
+                $termGrade += $examGrade * ($component->weight_percentage / 100);
+            }
+        }
 
         // Update or create term grade record with computation_config
         TermGrade::updateOrCreate(

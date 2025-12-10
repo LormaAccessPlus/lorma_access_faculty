@@ -263,13 +263,12 @@ class ClassroomSyncController extends Controller
                 ->where('faculty_id', $faculty->id)
                 ->firstOrFail();
 
-            // Remove GCR class ID and clear related student mappings
+            // Remove GCR class ID but preserve student mappings and grades
             DB::transaction(function () use ($subject) {
-                // Clear student mappings for this subject
-                StudentMapping::where('subject_id', $subject->id)->delete();
-                
-                // Clear GCR connection
+                // Only clear GCR connection - preserve all student data
                 $subject->update(['gcr_class_id' => null]);
+                
+                // Note: Student mappings and grades are preserved for historical records
             });
 
             return response()->json([
@@ -347,21 +346,25 @@ class ClassroomSyncController extends Controller
                             continue;
                         }
                         
-                        // Check if mapping already exists
-                        $existingMapping = StudentMapping::where('subject_id', $subject->id)
-                            ->where('gcr_student_id', $userId)
-                            ->first();
-
-                        if (!$existingMapping) {
-                            StudentMapping::create([
+                        // Use updateOrCreate to handle potential duplicates
+                        $mapping = StudentMapping::updateOrCreate(
+                            [
                                 'subject_id' => $subject->id,
-                                'gcr_student_id' => $userId,
                                 'student_name' => $studentName,
+                            ],
+                            [
+                                'gcr_student_id' => $userId,
                                 'student_email' => $email,
-                                'mapping_confidence' => 0.0 // Will be updated by matching algorithm
-                            ]);
+                                'mapping_confidence' => 0.0, // Will be updated by matching algorithm
+                                'auto_matched' => true,
+                            ]
+                        );
+                        
+                        if ($mapping->wasRecentlyCreated) {
                             $syncedCount++;
                             Log::info('Student synced successfully', ['name' => $studentName, 'user_id' => $userId]);
+                        } else {
+                            Log::info('Student updated successfully', ['name' => $studentName, 'user_id' => $userId]);
                         }
                     } catch (\Exception $e) {
                         $studentName = 'Unknown';

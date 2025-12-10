@@ -25,6 +25,9 @@ class DynamicGradingController extends Controller
         $currentAcademicYear = config('app.current_academic_year', '2024-2025');
         $currentSemester = config('app.current_semester', '1');
         
+        // Auto-check and archive subjects if their GCR classrooms are archived
+        $this->autoCheckArchivedSubjects($faculty);
+        
         // Get grading classes for this faculty (only for active subjects)
         $gradingClasses = GradingClass::where('faculty_id', $faculty->id)
             ->whereHas('subject', function($query) {
@@ -387,6 +390,7 @@ class DynamicGradingController extends Controller
             'student_mapping_id' => 'required|exists:student_mappings,id',
             'component_id' => 'required|exists:grading_components,id',
             'exam_score' => 'nullable|numeric|min:0',
+            'exam_max_score' => 'nullable|numeric|min:0',
         ]);
 
         $faculty = auth('faculty')->user();
@@ -395,6 +399,27 @@ class DynamicGradingController extends Controller
             ->firstOrFail();
 
         $component = GradingComponent::findOrFail($request->component_id);
+        
+        // Calculate computed score using the configured formula
+        $computedScore = null;
+        $examScore = $request->exam_score;
+        $examMaxScore = $request->exam_max_score ?? 100;
+        
+        if ($examScore !== null && $examMaxScore > 0) {
+            if ($component->formula) {
+                // Apply the configured formula (e.g., score/total*60+40)
+                $formula = str_replace(['score', 'total'], [$examScore, $examMaxScore], $component->formula);
+                try {
+                    $computedScore = eval("return {$formula};");
+                } catch (\Exception $e) {
+                    // Fallback to percentage if formula fails
+                    $computedScore = ($examScore / $examMaxScore) * 100;
+                }
+            } else {
+                // Default to percentage calculation
+                $computedScore = ($examScore / $examMaxScore) * 100;
+            }
+        }
 
         StudentGrade::updateOrCreate(
             [
@@ -403,11 +428,16 @@ class DynamicGradingController extends Controller
                 'component_id' => $request->component_id,
             ],
             [
-                'exam_score' => $request->exam_score,
+                'exam_score' => $examScore,
+                'max_score' => $examMaxScore,
+                'computed_score' => $computedScore,
             ]
         );
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'computed_score' => $computedScore ? round($computedScore, 2) : null
+        ]);
     }
 
     public function updateExamMaxScore(Request $request, $componentId)
@@ -760,8 +790,19 @@ class DynamicGradingController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ];
         
-        $callback = function() use ($students, $gradingClasses, $matrixComponents, $finalRatingFormula, $termWeights) {
+        $callback = function() use ($students, $gradingClasses, $matrixComponents, $finalRatingFormula, $termWeights, $subject, $faculty) {
             $file = fopen('php://output', 'w');
+            
+            // Subject information header
+            $semesterText = $subject->semester == 1 ? 'First' : ($subject->semester == 2 ? 'Second' : 'Summer');
+            $department = $gradingClasses->first()->department ?? '';
+            
+            fputcsv($file, ['Subject:', $subject->subject_code . '_' . $subject->subject_name]);
+            fputcsv($file, ['Term:', $semesterText . ' Semester ' . $subject->academic_year]);
+            fputcsv($file, ['Teacher:', $faculty->name]);
+            fputcsv($file, ['Department:', $department]);
+            fputcsv($file, ['For:', $subject->section]);
+            fputcsv($file, []); // Empty row for spacing
             
             // Header row
             $header = ['#', 'ID No.', 'Full Name', 'Gender', 'Course', 'YL'];
@@ -887,6 +928,38 @@ class DynamicGradingController extends Controller
         }
         
         return $termGrade;
+    }
+
+    private function autoCheckArchivedSubjects($faculty)
+    {
+        try {
+            // Get all active subjects with GCR connections for this faculty
+            $subjects = Subject::where('faculty_id', $faculty->id)
+                ->whereNotNull('gcr_class_id')
+                ->whereNull('archived_at')
+                ->get();
+
+            if ($subjects->isEmpty()) {
+                return;
+            }
+
+            $classroomService = app(\App\Services\GoogleClassroomService::class);
+            
+            // Try to authenticate with faculty's Google account
+            if (!$classroomService->authenticateWithFaculty($faculty)) {
+                return; // Skip if can't authenticate
+            }
+
+            foreach ($subjects as $subject) {
+                $classroomService->checkAndArchiveSubject($subject);
+            }
+        } catch (\Exception $e) {
+            // Silently fail - don't interrupt the user experience
+            Log::error('Auto-archive check failed', [
+                'faculty_id' => $faculty->id,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     public function exportFullMatrixPdf(Request $request, $subjectId)

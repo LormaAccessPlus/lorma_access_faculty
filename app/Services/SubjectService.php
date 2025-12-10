@@ -20,6 +20,9 @@ class SubjectService
      */
     public function getCurrentSemesterSubjects(int $facultyId): Collection
     {
+        // Auto-check for archived subjects
+        $this->autoCheckArchivedSubjects($facultyId);
+        
         // Get current academic year and semester from config (with school database as fallback)
         $currentAcademicYear = config('app.current_academic_year');
         $currentSemester = config('app.current_semester');
@@ -236,5 +239,42 @@ class SubjectService
             'finals' => 0,
             'overall' => 0,
         ];
+    }
+
+    private function autoCheckArchivedSubjects(int $facultyId): void
+    {
+        try {
+            $faculty = \App\Models\Faculty::find($facultyId);
+            if (!$faculty) {
+                return;
+            }
+
+            // Get all active subjects with GCR connections for this faculty
+            $subjects = Subject::where('faculty_id', $facultyId)
+                ->whereNotNull('gcr_class_id')
+                ->whereNull('archived_at')
+                ->get();
+
+            if ($subjects->isEmpty()) {
+                return;
+            }
+
+            $classroomService = app(\App\Services\GoogleClassroomService::class);
+            
+            // Try to authenticate with faculty's Google account
+            if (!$classroomService->authenticateWithFaculty($faculty)) {
+                return; // Skip if can't authenticate
+            }
+
+            foreach ($subjects as $subject) {
+                $classroomService->checkAndArchiveSubject($subject);
+            }
+        } catch (\Exception $e) {
+            // Silently fail - don't interrupt the user experience
+            \Illuminate\Support\Facades\Log::error('Auto-archive check failed in SubjectService', [
+                'faculty_id' => $facultyId,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }
