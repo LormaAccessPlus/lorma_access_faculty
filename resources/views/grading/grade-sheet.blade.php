@@ -109,6 +109,42 @@
                         Fetch Scores from GCR
                     </button>
                 @endif
+                
+                <!-- Export Dropdown -->
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open" 
+                           class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm">
+                        <i class="fas fa-file-export mr-2"></i>
+                        Export {{ ucfirst($gradingClass->term) }}
+                        <i class="fas fa-chevron-down ml-2 text-xs"></i>
+                    </button>
+                    
+                    <div x-show="open" @click.away="open = false" x-cloak x-transition
+                         class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                        <div class="py-2">
+                            <div class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                                Export Options
+                            </div>
+                            <a href="{{ route('grading.export-term-csv', $gradingClass->id) }}" 
+                               class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors">
+                                <i class="fas fa-file-csv mr-3 text-green-600"></i>
+                                <div>
+                                    <div class="font-medium">Export as CSV</div>
+                                    <div class="text-xs text-gray-500">Spreadsheet format</div>
+                                </div>
+                            </a>
+                            <a href="{{ route('grading.export-term-pdf', $gradingClass->id) }}" 
+                               class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                <i class="fas fa-file-pdf mr-3 text-red-600"></i>
+                                <div>
+                                    <div class="font-medium">Export as PDF</div>
+                                    <div class="text-xs text-gray-500">Printable format</div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
                 <a href="{{ route('grading.configure', $gradingClass->id) }}" 
                    class="inline-flex items-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors">
                     <i class="fas fa-cog mr-2"></i>
@@ -384,9 +420,9 @@
                                 <td class="sticky left-0 z-10 bg-white px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-200">
                                     <div class="flex items-center">
                                         <div class="flex-shrink-0 h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                                            <span class="text-sm font-medium text-blue-600">{{ strtoupper(substr($student->student_name, 0, 1)) }}</span>
+                                            <span class="text-sm font-medium text-blue-600">{{ strtoupper(substr($student->formatted_name, 0, 1)) }}</span>
                                         </div>
-                                        {{ $student->student_name }}
+                                        {{ $student->formatted_name }}
                                     </div>
                                 </td>
                                 @php

@@ -54,7 +54,7 @@
                             <div class="border rounded-lg p-4">
                                 <h4 class="font-medium text-gray-900 mb-2">GCR Student</h4>
                                 <div class="text-sm text-gray-600">
-                                    <p><strong>Name:</strong> {{ $conflict['mapping']->student_name }}</p>
+                                    <p><strong>Name:</strong> {{ $conflict['mapping']->formatted_name }}</p>
                                     <p><strong>Email:</strong> {{ $conflict['mapping']->student_email ?? 'N/A' }}</p>
                                 </div>
                             </div>
@@ -97,7 +97,7 @@
                             @foreach($conflict['mappings'] as $mapping)
                                 <div class="border rounded-lg p-4 flex justify-between items-center">
                                     <div>
-                                        <h4 class="font-medium text-gray-900">{{ $mapping->student_name }}</h4>
+                                        <h4 class="font-medium text-gray-900">{{ $mapping->formatted_name }}</h4>
                                         <p class="text-sm text-gray-600">{{ $mapping->student_email ?? 'No email' }}</p>
                                         <p class="text-sm text-gray-500">
                                             Confidence: {{ number_format($mapping->mapping_confidence * 100, 1) }}%

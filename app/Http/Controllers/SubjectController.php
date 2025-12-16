@@ -146,10 +146,106 @@ class SubjectController extends Controller
     {
         $this->authorize('update', $subject);
         
-        $subject->update(['gcr_course_state' => 'ARCHIVED']);
+        // Set archived timestamp and state
+        $subject->update([
+            'gcr_course_state' => 'ARCHIVED',
+            'archived_at' => now()
+        ]);
+
+        // Preserve computed grades by ensuring all grades have computed_score calculated
+        $this->preserveComputedGrades($subject);
 
         return redirect()->route('archive.show', $subject)
-            ->with('success', "Subject '{$subject->subject_code}' has been archived.");
+            ->with('success', "Subject '{$subject->subject_code}' has been archived with grades preserved.");
+    }
+    
+    /**
+     * Preserve computed grades when archiving
+     */
+    private function preserveComputedGrades(Subject $subject): void
+    {
+        try {
+            // Get all grading classes for this subject
+            $gradingClasses = $subject->gradingClasses()->with(['components.items'])->get();
+            
+            foreach ($gradingClasses as $gradingClass) {
+                foreach ($gradingClass->components as $component) {
+                    if ($component->component_type === 'exam') {
+                        // Handle exam components
+                        $examGrades = \App\Models\StudentGrade::where('grading_class_id', $gradingClass->id)
+                            ->where('component_id', $component->id)
+                            ->whereNotNull('exam_score')
+                            ->whereNull('computed_score')
+                            ->get();
+                        
+                        foreach ($examGrades as $grade) {
+                            if ($component->formula && $grade->exam_score !== null) {
+                                $computedScore = $this->applyFormula(
+                                    $grade->exam_score,
+                                    $component->exam_max_score ?? 100,
+                                    $component->formula
+                                );
+                                $grade->update(['computed_score' => $computedScore]);
+                            }
+                        }
+                    } else {
+                        // Handle regular component items
+                        foreach ($component->items as $item) {
+                            $grades = \App\Models\StudentGrade::where('component_item_id', $item->id)
+                                ->whereNotNull('score')
+                                ->whereNull('computed_score')
+                                ->get();
+                            
+                            foreach ($grades as $grade) {
+                                if ($component->formula && $grade->score !== null) {
+                                    $computedScore = $this->applyFormula(
+                                        $grade->score,
+                                        $item->max_score,
+                                        $component->formula
+                                    );
+                                    $grade->update(['computed_score' => $computedScore]);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            \Illuminate\Support\Facades\Log::info('Computed grades preserved for archived subject', [
+                'subject_id' => $subject->id,
+                'subject_code' => $subject->subject_code
+            ]);
+            
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error preserving computed grades during archive', [
+                'subject_id' => $subject->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * Apply formula to calculate computed score
+     */
+    private function applyFormula($score, $total, $formula)
+    {
+        try {
+            // Replace variables in formula
+            $expression = str_replace(['score', 'total'], [$score, $total], $formula);
+            
+            // Safely evaluate the expression
+            $result = eval("return {$expression};");
+            
+            return round($result, 2);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Formula evaluation error during archive', [
+                'formula' => $formula,
+                'score' => $score,
+                'total' => $total,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
     }
 
     /**
@@ -159,7 +255,10 @@ class SubjectController extends Controller
     {
         $this->authorize('update', $subject);
         
-        $subject->update(['gcr_course_state' => 'ACTIVE']);
+        $subject->update([
+            'gcr_course_state' => 'ACTIVE',
+            'archived_at' => null
+        ]);
 
         return redirect()->route('subjects.show', $subject)
             ->with('success', "Subject '{$subject->subject_code}' has been unarchived.");

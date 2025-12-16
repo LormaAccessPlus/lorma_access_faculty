@@ -338,12 +338,12 @@
                                     <div class="flex-shrink-0">
                                         <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold" 
                                              style="background: linear-gradient(135deg, #08695A, #0A7B6A);">
-                                            {{ substr($studentMapping->student_name, 0, 1) }}
+                                            {{ substr($studentMapping->formatted_name, 0, 1) }}
                                         </div>
                                     </div>
                                     <div class="min-w-0 flex-1">
                                         <p class="text-sm font-medium text-gray-900 truncate">
-                                            {{ $studentMapping->student_name }}
+                                            {{ $studentMapping->formatted_name }}
                                         </p>
                                     </div>
                                 </div>

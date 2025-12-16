@@ -194,7 +194,7 @@
                     $finalGrade = $finalGrades[$studentMapping->id] ?? null;
                 @endphp
                 <tr style="{{ $index % 2 === 0 ? '' : 'background-color: #f9fafb;' }}">
-                    <td class="student-name">{{ $studentMapping->student_name ?? 'Unknown' }}</td>
+                    <td class="student-name">{{ $studentMapping->formatted_name ?? 'Unknown' }}</td>
                     
                     @foreach($terms as $term)
                         @php

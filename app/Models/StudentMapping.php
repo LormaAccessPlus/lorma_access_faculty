@@ -43,4 +43,44 @@ class StudentMapping extends Model
     {
         return $this->hasMany(GradeRecord::class);
     }
+
+    /**
+     * Get the formatted student name in "LASTNAME, Firstname" format
+     */
+    public function getFormattedNameAttribute(): string
+    {
+        return $this->formatNameToLastnameFirst($this->student_name);
+    }
+
+    /**
+     * Format name to "LASTNAME, Firstname" format
+     */
+    private function formatNameToLastnameFirst($fullName): string
+    {
+        $fullName = trim($fullName);
+        
+        // If already in LASTNAME, Firstname format, return as is
+        if (preg_match('/^[A-Z\s]+,\s*/', $fullName)) {
+            return $fullName;
+        }
+        
+        // Split name into parts
+        $parts = array_values(array_filter(preg_split('/\s+/', $fullName)));
+        
+        if (count($parts) === 0) {
+            return $fullName;
+        }
+        
+        if (count($parts) === 1) {
+            // Only one name part, return as is in uppercase
+            return strtoupper($parts[0]);
+        }
+        
+        // Last part is the last name, rest are first/middle names
+        $lastName = array_pop($parts);
+        $firstName = implode(' ', $parts);
+        
+        // Format: LASTNAME, First Name
+        return strtoupper($lastName) . ', ' . $firstName;
+    }
 }

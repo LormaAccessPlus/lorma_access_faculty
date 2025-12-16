@@ -47,6 +47,14 @@
                 </p>
             </div>
             <div class="mt-4 sm:mt-0 flex flex-wrap gap-2">
+                <a href="{{ route('grades.term', [$subject, 'prelim']) }}" 
+                   class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white transition-colors"
+                   style="background-color: #6366F1;"
+                   onmouseover="this.style.backgroundColor='#4F46E5';"
+                   onmouseout="this.style.backgroundColor='#6366F1';">
+                    <i class="fas fa-list-alt mr-2"></i>
+                    Term Grades
+                </a>
                 <button onclick="exportGrades()"
                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white transition-colors"
                    style="background-color: #E67E22;"
@@ -178,11 +186,11 @@
                                     <div class="flex-shrink-0">
                                         <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold" 
                                              style="background: linear-gradient(135deg, #08695A, #0A7B6A);">
-                                            {{ substr($studentMapping->student_name, 0, 1) }}
+                                            {{ substr($studentMapping->formatted_name, 0, 1) }}
                                         </div>
                                     </div>
                                     <div class="min-w-0 flex-1">
-                                        <p class="text-sm font-medium text-gray-900">{{ $studentMapping->student_name }}</p>
+                                        <p class="text-sm font-medium text-gray-900">{{ $studentMapping->formatted_name }}</p>
                                         @if($studentMapping->student_email)
                                             <p class="text-xs text-gray-500">{{ $studentMapping->student_email }}</p>
                                         @endif

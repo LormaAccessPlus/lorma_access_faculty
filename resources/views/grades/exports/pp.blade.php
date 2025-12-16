@@ -167,7 +167,7 @@
                     $remarks = $finalRating ? ($finalRating >= 75 ? 'PASSED' : 'FAILED') : 'NO GRADE';
                 @endphp
                 <tr>
-                    <td class="student-name">{{ $mapping->student_name }}</td>
+                    <td class="student-name">{{ $mapping->formatted_name }}</td>
                     <td>{{ $prelimGrade ? number_format($prelimGrade->term_grade, 2) : '-' }}</td>
                     <td>{{ $midtermGrade ? number_format($midtermGrade->term_grade, 2) : '-' }}</td>
                     <td>{{ $finalsGrade ? number_format($finalsGrade->term_grade, 2) : '-' }}</td>

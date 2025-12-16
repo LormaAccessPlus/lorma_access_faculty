@@ -266,6 +266,7 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::post('/save-exam-score', [App\Http\Controllers\DynamicGradingController::class, 'saveExamScore'])->name('save-exam-score');
         Route::post('/{id}/fetch-scores', [App\Http\Controllers\DynamicGradingController::class, 'fetchScoresFromGCR'])->name('fetch-scores');
         Route::post('/component-item/{itemId}/update-max-score', [App\Http\Controllers\DynamicGradingController::class, 'updateMaxScore'])->name('update-max-score');
+        Route::post('/component-item/{itemId}/move-to-component', [App\Http\Controllers\DynamicGradingController::class, 'moveItemToComponent'])->name('move-item-to-component');
         Route::post('/component/{componentId}/update-exam-max-score', [App\Http\Controllers\DynamicGradingController::class, 'updateExamMaxScore'])->name('update-exam-max-score');
         Route::get('/subject/{subjectId}/full-matrix', [App\Http\Controllers\DynamicGradingController::class, 'fullMatrix'])->name('full-matrix');
         Route::post('/subject/{subjectId}/update-final-rating-formula', [App\Http\Controllers\DynamicGradingController::class, 'updateFinalRatingFormula'])->name('update-final-rating-formula');
@@ -274,6 +275,8 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::delete('/matrix-component/{componentId}', [App\Http\Controllers\DynamicGradingController::class, 'deleteMatrixComponent'])->name('delete-matrix-component');
         Route::get('/subject/{subjectId}/export-full-matrix-csv', [App\Http\Controllers\DynamicGradingController::class, 'exportFullMatrixCsv'])->name('export-full-matrix-csv');
         Route::get('/subject/{subjectId}/export-full-matrix-pdf', [App\Http\Controllers\DynamicGradingController::class, 'exportFullMatrixPdf'])->name('export-full-matrix-pdf');
+        Route::get('/{gradingClassId}/export-term-csv', [App\Http\Controllers\DynamicGradingController::class, 'exportTermCsv'])->name('export-term-csv');
+        Route::get('/{gradingClassId}/export-term-pdf', [App\Http\Controllers\DynamicGradingController::class, 'exportTermPdf'])->name('export-term-pdf');
     });
     
     // Student Mapping Page (Legacy - keep for now)

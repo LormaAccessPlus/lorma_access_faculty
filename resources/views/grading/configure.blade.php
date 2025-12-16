@@ -109,7 +109,7 @@
                                 </div>
                                 <div class="col-span-4">
                                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                                        <i class="fas fa-calculator text-gray-400 mr-1"></i> Formula (optional)
+                                        <i class="fas fa-calculator text-red-500 mr-1"></i> Formula <span class="text-red-500">*</span>
                                     </label>
                                     <input type="text" 
                                            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
@@ -170,7 +170,7 @@
                             </div>
                             <div class="col-span-4">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-calculator text-gray-400 mr-1"></i> Formula (optional)
+                                    <i class="fas fa-calculator text-red-500 mr-1"></i> Formula <span class="text-red-500">*</span>
                                 </label>
                                 <input type="text" 
                                        class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
@@ -217,10 +217,13 @@
             </div>
 
             <!-- Formula Help -->
-            <div class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <h4 class="text-sm font-semibold text-gray-900 mb-2">
-                    <i class="fas fa-info-circle text-blue-600 mr-1"></i> Formula Variables
+            <div class="mt-4 p-4 bg-red-50 border-2 border-red-200 rounded-lg">
+                <h4 class="text-sm font-semibold text-red-900 mb-2">
+                    <i class="fas fa-exclamation-triangle text-red-600 mr-1"></i> Formula Required
                 </h4>
+                <p class="text-sm text-red-800 mb-3">
+                    <strong>Important:</strong> Each component must have a formula to compute grades correctly. Without formulas, raw scores will be used directly.
+                </p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
                     <div class="flex items-start">
                         <code class="px-2 py-1 bg-gray-200 rounded text-xs mr-2">score</code>
@@ -234,7 +237,7 @@
                 <div class="mt-2 p-2 bg-blue-50 rounded">
                     <p class="text-xs text-gray-600">
                         <strong>Example:</strong> <code class="bg-white px-1 rounded">score / total * 60 + 40</code> 
-                        converts to 60-100 scale
+                        converts to 60-100 scale (60% for perfect score + 40% base)
                     </p>
                 </div>
             </div>
@@ -348,7 +351,7 @@ function addComponent() {
                 </div>
                 <div class="col-span-4">
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-calculator text-gray-400 mr-1"></i> Formula (optional)
+                        <i class="fas fa-calculator text-red-500 mr-1"></i> Formula <span class="text-red-500">*</span>
                     </label>
                     <input type="text" 
                            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 

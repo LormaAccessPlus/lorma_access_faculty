@@ -60,10 +60,31 @@
                         <i class="fas fa-cog mr-2"></i>
                         Configure Weights
                     </button>
-                    <a href="{{ route('grading.grade-sheet', $gradingClasses->first()->id) }}" class="inline-flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
-                        <i class="fas fa-arrow-left mr-2"></i>
-                        Back
-                    </a>
+                    <!-- Grade Sheet Dropdown -->
+                    <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" class="inline-flex items-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
+                            <i class="fas fa-table mr-2"></i>
+                            Grade Sheet
+                            <i class="fas fa-chevron-down ml-2 text-xs"></i>
+                        </button>
+                        <div x-show="open" @click.away="open = false" x-cloak x-transition class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                            <div class="py-2">
+                                <div class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                                    Select Term
+                                </div>
+                                @foreach($gradingClasses as $gradingClass)
+                                    <a href="{{ route('grading.grade-sheet', $gradingClass->id) }}" 
+                                       class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors">
+                                        <i class="fas fa-calendar-alt mr-3 text-teal-600"></i>
+                                        <div>
+                                            <div class="font-medium">{{ ucfirst($gradingClass->term) }} Term</div>
+                                            <div class="text-xs text-gray-500">Grade entry & management</div>
+                                        </div>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -143,12 +164,15 @@
                             <td class="sticky left-0 z-10 bg-white px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                 <div class="flex items-center">
                                     @php
-                                        $nameParts = explode(' ', $student->student_name);
-                                        $initials = '';
-                                        if (count($nameParts) >= 2) {
-                                            $initials = strtoupper(substr($nameParts[0], 0, 1) . substr($nameParts[1], 0, 1));
+                                        // For "LASTNAME, Firstname" format, get L and F initials
+                                        $formattedName = $student->formatted_name;
+                                        if (strpos($formattedName, ',') !== false) {
+                                            $parts = explode(',', $formattedName);
+                                            $lastname = trim($parts[0]);
+                                            $firstname = trim($parts[1] ?? '');
+                                            $initials = strtoupper(substr($lastname, 0, 1) . substr($firstname, 0, 1));
                                         } else {
-                                            $initials = strtoupper(substr($student->student_name, 0, 1));
+                                            $initials = strtoupper(substr($formattedName, 0, 1));
                                         }
                                         $colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500'];
                                         $colorIndex = ord($initials[0]) % count($colors);
@@ -156,7 +180,7 @@
                                     <div class="flex-shrink-0 h-10 w-10 {{ $colors[$colorIndex] }} rounded-full flex items-center justify-center mr-3">
                                         <span class="text-sm font-semibold text-white">{{ $initials }}</span>
                                     </div>
-                                    <div class="font-medium text-gray-900">{{ $student->student_name }}</div>
+                                    <div class="font-medium text-gray-900">{{ $student->formatted_name }}</div>
                                 </div>
                             </td>
                             @php
@@ -180,8 +204,14 @@
                                                 ->first();
                                             
                                             if ($examGrade && $examGrade->exam_score !== null) {
-                                                $examMaxScore = $component->exam_max_score ?? 100;
-                                                $examComputedScore = ($examGrade->exam_score / $examMaxScore) * 100;
+                                                // Use computed_score if available (applies configured formula)
+                                                if ($examGrade->computed_score !== null) {
+                                                    $examComputedScore = $examGrade->computed_score;
+                                                } else {
+                                                    // Fallback to raw percentage calculation
+                                                    $examMaxScore = $component->exam_max_score ?? 100;
+                                                    $examComputedScore = ($examGrade->exam_score / $examMaxScore) * 100;
+                                                }
                                                 $termGrade += $examComputedScore * ($component->weight_percentage / 100);
                                                 $totalWeight += $component->weight_percentage;
                                             }
@@ -361,7 +391,7 @@
                     <!-- Additional Components Section -->
                     <div>
                         <div class="flex items-center justify-between mb-4">
-                            <h4 class="text-lg font-semibold text-gray-900">Additional Component (Optional)</h4>
+                            <h4 class="text-lg font-semibold text-gray-900">Additional Component</h4>
                             <button type="button" onclick="addAdditionalComponent()" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
                                 + Add Component
                             </button>
@@ -383,12 +413,14 @@
                                            data-component="{{ $component->component_name }}" 
                                            value="{{ $finalRatingFormula['components'][$component->component_name] ?? $finalRatingFormula[$component->component_name] ?? 0 }}" 
                                            min="0" max="100" step="0.01">
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Formula (Optional)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i class="fas fa-calculator text-red-500 mr-1"></i> Formula <span class="text-red-500">*</span>
+                                    </label>
                                     <input type="text" class="component-formula-input block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm" 
                                            data-component="{{ $component->component_name }}"
                                            value="{{ $component->formula ?? '' }}" 
                                            placeholder="e.g., score/total*60+40">
-                                    <p class="mt-1 text-xs text-gray-500">Use 'score' and 'total' as variables. Leave empty for (score/total)*100</p>
+                                    <p class="mt-1 text-xs text-red-600 font-medium">Required: Use 'score' and 'total' as variables for grade computation</p>
                                 </div>
                             @endforeach
                         </div>
@@ -446,10 +478,12 @@ function addAdditionalComponent() {
         <label class="block text-sm font-medium text-gray-700 mb-2">Weight (%)</label>
         <input type="number" class="component-weight-input block w-full px-4 py-2 mb-3 border-2 border-blue-400 rounded-lg" 
                value="0" min="0" max="100" step="0.01">
-        <label class="block text-sm font-medium text-gray-700 mb-2">Formula (Optional)</label>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-calculator text-red-500 mr-1"></i> Formula <span class="text-red-500">*</span>
+        </label>
         <input type="text" class="component-formula-input block w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm" 
-               placeholder="e.g., score/total*60+40">
-        <p class="mt-1 text-xs text-gray-500">Use 'score' and 'total' as variables. Leave empty for (score/total)*100</p>
+               placeholder="e.g., score/total*60+40" required>
+        <p class="mt-1 text-xs text-red-600 font-medium">Required: Use 'score' and 'total' as variables for grade computation</p>
     `;
     container.appendChild(div);
     
@@ -544,17 +578,22 @@ document.getElementById('formulaForm').addEventListener('submit', async function
         const formula = formulaInput ? formulaInput.value.trim() : '';
         
         if (name && weight > 0) {
+            // Validate that formula is provided
+            if (!formula) {
+                alert(`Formula is required for component: ${name}`);
+                formulaInput.focus();
+                return;
+            }
+            
             components.push({ name, weight });
             additionalTotal += weight;
             
             // Store formula for this component
-            if (formula) {
-                componentFormulas[name] = formula;
-            }
+            componentFormulas[name] = formula;
             
             // Check if this is a new component (not readonly)
             if (!nameInput.hasAttribute('readonly')) {
-                newComponents.push({ component_name: name, max_score: 100, formula: formula || null });
+                newComponents.push({ component_name: name, max_score: 100, formula: formula });
             }
         }
     });

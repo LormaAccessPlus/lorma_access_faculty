@@ -123,7 +123,7 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>{{ $csvData['id_no'] ?? '' }}</td>
-                    <td class="name">{{ $student->student_name }}</td>
+                    <td class="name">{{ $student->formatted_name }}</td>
                     <td>{{ $csvData['gender'] ?? '' }}</td>
                     <td>{{ $csvData['course'] ?? '' }}</td>
                     <td>{{ $csvData['yl'] ?? '' }}</td>
@@ -138,8 +138,14 @@
                                         ->where('component_id', $component->id)
                                         ->first();
                                     if ($examGrade && $examGrade->exam_score !== null) {
-                                        $examMaxScore = $component->exam_max_score ?? 100;
-                                        $examComputedScore = ($examGrade->exam_score / $examMaxScore) * 100;
+                                        // Use computed_score if available (applies configured formula)
+                                        if ($examGrade->computed_score !== null) {
+                                            $examComputedScore = $examGrade->computed_score;
+                                        } else {
+                                            // Fallback to raw percentage calculation
+                                            $examMaxScore = $component->exam_max_score ?? 100;
+                                            $examComputedScore = ($examGrade->exam_score / $examMaxScore) * 100;
+                                        }
                                         $termGrade += $examComputedScore * ($component->weight_percentage / 100);
                                     }
                                 } else {

@@ -42,6 +42,7 @@ class ActivityController extends Controller
         $query = Activity::with('subject')
             ->whereHas('subject', function($q) use ($faculty, $currentAcademicYear, $currentSemester) {
                 $q->where('faculty_id', $faculty->id)
+                    ->active()
                     ->where('academic_year', $currentAcademicYear)
                     ->where('semester', $currentSemester);
             })

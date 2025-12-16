@@ -101,7 +101,7 @@
                 @endphp
                 <tr>
                     <td>{{ $index + 1 }}</td>
-                    <td class="student-name">{{ $mapping->student_name }}</td>
+                    <td class="student-name">{{ $mapping->formatted_name }}</td>
                     <td class="grade-cell">{{ $grade ? number_format($grade, 2) : '-' }}</td>
                 </tr>
             @endforeach

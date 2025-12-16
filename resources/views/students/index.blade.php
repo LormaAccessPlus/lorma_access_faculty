@@ -12,14 +12,41 @@
 @endsection
 
 @section('content')
+@php
+    // Only count students that were imported via CSV, not auto-synced from GCR
+    $hasAnyStudents = $subjects->sum(fn($s) => $s->studentMappings->whereNotNull('csv_data')->count()) > 0;
+@endphp
+
+@if(!$hasAnyStudents)
+<!-- Getting Started Banner -->
+<div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded-r-lg">
+    <div class="flex items-center">
+        <div class="flex-shrink-0">
+            <i class="fas fa-info-circle text-blue-400 text-xl"></i>
+        </div>
+        <div class="ml-3">
+            <h3 class="text-sm font-medium text-blue-800">
+                Welcome to Student Management
+            </h3>
+            <div class="mt-2 text-sm text-blue-700">
+                <p>Import students from CSV files to enable grading. Students will be automatically matched with your Google Classroom rosters.</p>
+                <p class="mt-1"><strong>Note:</strong> Google Classroom students are synced automatically, but you need to import CSV data to use them for grading.</p>
+                <p class="mt-1"><strong>Tip:</strong> Click "Import CSV" on any subject card below to begin.</p>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
 <!-- Statistics Cards -->
 @php
-    $totalStudents = $subjects->sum(fn($s) => $s->studentMappings->count());
-    $totalMatched = $subjects->sum(fn($s) => $s->studentMappings->where('auto_matched', true)->count());
+    // Only count students that were imported via CSV, not auto-synced from GCR
+    $totalStudents = $subjects->sum(fn($s) => $s->studentMappings->whereNotNull('csv_data')->count());
+    $totalMatched = $subjects->sum(fn($s) => $s->studentMappings->whereNotNull('csv_data')->where('auto_matched', true)->count());
     $totalSubjects = $subjects->count();
     $matchRate = $totalStudents > 0 ? round(($totalMatched / $totalStudents) * 100) : 0;
 @endphp
 
+@if($totalStudents > 0)
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
     <!-- Total Students -->
     <div class="bg-white rounded-lg shadow-sm p-6">
@@ -81,6 +108,7 @@
         </div>
     </div>
 </div>
+@endif
 
 <!-- Search and Filter -->
 <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -95,6 +123,7 @@
                        placeholder="Search by subject name or code...">
             </div>
         </div>
+        @if($hasAnyStudents)
         <div>
             <select id="filterStatus" class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <option value="">All Status</option>
@@ -111,6 +140,11 @@
                 <option value="matched">Match Rate</option>
             </select>
         </div>
+        @else
+        <div class="md:col-span-2 flex items-center justify-center">
+            <p class="text-sm text-gray-500 italic">Import students to enable filtering and sorting options</p>
+        </div>
+        @endif
     </div>
 </div>
 
@@ -118,8 +152,9 @@
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="subjectsGrid">
     @forelse($subjects as $subject)
         @php
-            $studentCount = $subject->studentMappings->count();
-            $matchedCount = $subject->studentMappings->whereNotNull('gcr_student_id')->count();
+            // Only count students that were imported via CSV, not auto-synced from GCR
+            $studentCount = $subject->studentMappings->whereNotNull('csv_data')->count();
+            $matchedCount = $subject->studentMappings->whereNotNull('csv_data')->whereNotNull('gcr_student_id')->count();
             $matchPercentage = $studentCount > 0 ? round(($matchedCount / $studentCount) * 100) : 0;
         @endphp
         <div class="subject-card bg-white rounded-lg shadow-sm hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1" 
@@ -148,35 +183,50 @@
                     @endif
                 </div>
                 
-                <!-- Progress Bar -->
-                <div class="mb-4">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-xs text-gray-600">Match Progress</span>
-                        <span class="text-xs font-semibold text-gray-900">{{ $matchedCount }}/{{ $studentCount }}</span>
+                @if($studentCount > 0)
+                    <!-- Progress Bar -->
+                    <div class="mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs text-gray-600">Match Progress</span>
+                            <span class="text-xs font-semibold text-gray-900">{{ $matchedCount }}/{{ $studentCount }}</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="h-2 rounded-full {{ $matchPercentage == 100 ? 'bg-green-500' : 'bg-yellow-500' }}" 
+                                 style="width: {{ $matchPercentage }}%"></div>
+                        </div>
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div class="h-2 rounded-full {{ $matchPercentage == 100 ? 'bg-green-500' : ($studentCount > 0 ? 'bg-yellow-500' : 'bg-gray-300') }}" 
-                             style="width: {{ $matchPercentage }}%"></div>
+                    
+                    <!-- Stats -->
+                    <div class="flex gap-2 mb-4">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <i class="fas fa-users mr-1"></i> {{ $studentCount }} Students
+                        </span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <i class="fas fa-check mr-1"></i> {{ $matchedCount }} Matched
+                        </span>
                     </div>
-                </div>
-                
-                <!-- Stats -->
-                <div class="flex gap-2 mb-4">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        <i class="fas fa-users mr-1"></i> {{ $studentCount }} Students
-                    </span>
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        <i class="fas fa-check mr-1"></i> {{ $matchedCount }} Matched
-                    </span>
-                </div>
+                @else
+                    <!-- No Students State -->
+                    <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div class="flex items-center text-gray-600">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            <span class="text-sm">No students imported yet</span>
+                        </div>
+                    </div>
+                @endif
 
                 <!-- GCR Connection Status -->
                 @if($subject->gcr_class_id)
-                    <div class="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
-                        <p class="text-xs text-green-700">
-                            <i class="fas fa-check-circle mr-1"></i>
-                            Connected to Google Classroom - Students auto-synced
+                    <div class="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p class="text-xs text-blue-700">
+                            <i class="fas fa-link mr-1"></i>
+                            Connected to Google Classroom
                         </p>
+                        @if($studentCount == 0)
+                            <p class="text-xs text-blue-600 mt-1">
+                                Import CSV to add students for grading
+                            </p>
+                        @endif
                     </div>
                 @endif
 
@@ -226,7 +276,7 @@
                             <div class="grid grid-cols-3 gap-4 mb-4">
                                 <div class="bg-blue-50 rounded-lg p-3">
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-600">Total Students</span>
+                                        <span class="text-sm text-gray-600">CSV Imported</span>
                                         <span class="text-xl font-bold text-blue-600">{{ $studentCount }}</span>
                                     </div>
                                 </div>
@@ -253,7 +303,7 @@
                                     <input type="text" 
                                            onkeyup="filterStudents{{ $subject->id }}(this)"
                                            class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                           placeholder="Search students by name or email...">
+                                           placeholder="Search students by name...">
                                 </div>
                             </div>
 
@@ -266,9 +316,6 @@
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 <i class="fas fa-user mr-1"></i>Name
                                             </th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                <i class="fas fa-envelope mr-1"></i>Email
-                                            </th>
                                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 <i class="fas fa-check-circle mr-1"></i>Status
                                             </th>
@@ -278,21 +325,18 @@
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        @foreach($subject->studentMappings as $index => $mapping)
+                                        @foreach($subject->studentMappings->whereNotNull('csv_data') as $index => $mapping)
                                             <tr class="hover:bg-gray-50">
                                                 <td class="px-4 py-3 text-sm text-gray-500">{{ $index + 1 }}</td>
                                                 <td class="px-4 py-3">
                                                     <div class="flex items-center">
                                                         <div class="flex-shrink-0 h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                                            <span class="text-sm font-medium text-blue-600">{{ strtoupper(substr($mapping->student_name, 0, 1)) }}</span>
+                                                            <span class="text-sm font-medium text-blue-600">{{ strtoupper(substr($mapping->formatted_name, 0, 1)) }}</span>
                                                         </div>
                                                         <div class="ml-3">
-                                                            <p class="text-sm font-medium text-gray-900">{{ $mapping->student_name }}</p>
+                                                            <p class="text-sm font-medium text-gray-900">{{ $mapping->formatted_name }}</p>
                                                         </div>
                                                     </div>
-                                                </td>
-                                                <td class="px-4 py-3 text-sm text-gray-500">
-                                                    {{ $mapping->student_email ?? '-' }}
                                                 </td>
                                                 <td class="px-4 py-3 text-center">
                                                     @if($mapping->auto_matched)
@@ -350,14 +394,11 @@
                     
                     for (let i = 0; i < rows.length; i++) {
                         const nameCell = rows[i].getElementsByTagName('td')[1];
-                        const emailCell = rows[i].getElementsByTagName('td')[2];
                         
-                        if (nameCell && emailCell) {
+                        if (nameCell) {
                             const nameText = nameCell.textContent || nameCell.innerText;
-                            const emailText = emailCell.textContent || emailCell.innerText;
                             
-                            if (nameText.toLowerCase().indexOf(filter) > -1 || 
-                                emailText.toLowerCase().indexOf(filter) > -1) {
+                            if (nameText.toLowerCase().indexOf(filter) > -1) {
                                 rows[i].style.display = '';
                             } else {
                                 rows[i].style.display = 'none';
@@ -371,7 +412,7 @@
                     const rows = table.querySelectorAll('tr');
                     
                     // Headers
-                    csv.push(['#', 'Name', 'Email', 'Status', 'Confidence'].join(','));
+                    csv.push(['#', 'Name', 'Status', 'Confidence'].join(','));
                     
                     // Data rows
                     const dataRows = table.querySelectorAll('tbody tr');
@@ -533,32 +574,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     </div>
 
-                    <!-- CSV Format Info -->
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                        <h4 class="text-sm font-semibold text-blue-900 mb-2">
-                            <i class="fas fa-info-circle mr-1"></i>CSV Format Requirements
-                        </h4>
-                        <ul class="text-sm text-blue-800 space-y-1">
-                            <li><i class="fas fa-check text-green-600 mr-1"></i>Required columns: <code class="bg-blue-100 px-1 rounded">name</code> or <code class="bg-blue-100 px-1 rounded">student_name</code></li>
-                            <li><i class="fas fa-check text-green-600 mr-1"></i>Optional columns: <code class="bg-blue-100 px-1 rounded">email</code> or <code class="bg-blue-100 px-1 rounded">student_email</code></li>
-                            <li><i class="fas fa-check text-green-600 mr-1"></i>First row should contain column headers</li>
-                            <li><i class="fas fa-check text-green-600 mr-1"></i>System will auto-match students with Google Classroom roster</li>
-                        </ul>
-                    </div>
 
-                    <!-- Sample CSV -->
-                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <h4 class="text-sm font-semibold text-gray-900 mb-2">
-                            <i class="fas fa-file-alt mr-1"></i>Sample CSV Format
-                        </h4>
-                        <pre class="text-xs bg-white p-3 rounded border border-gray-200 overflow-x-auto"><code>name,email
-Juan Dela Cruz,juan.delacruz@student.lorma.edu
-Maria Santos,maria.santos@student.lorma.edu
-Pedro Reyes,pedro.reyes@student.lorma.edu</code></pre>
-                        <a href="/sample_students.csv" download class="inline-flex items-center mt-2 text-sm text-blue-600 hover:text-blue-800">
-                            <i class="fas fa-download mr-1"></i>Download sample CSV
-                        </a>
-                    </div>
                 </div>
 
                 <div class="bg-gray-50 px-6 py-4 flex justify-end gap-3">

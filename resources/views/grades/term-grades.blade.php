@@ -494,7 +494,7 @@
                                     @endphp
                                     <tr class="hover:bg-gray-50">
                                         <td class="px-6 py-4 whitespace-nowrap bg-gray-50 sticky left-0 z-10 border-r border-gray-200">
-                                            <div class="text-sm font-medium text-gray-900">{{ $studentMapping->student_name }}</div>
+                                            <div class="text-sm font-medium text-gray-900">{{ $studentMapping->formatted_name }}</div>
                                             @if(isset($studentMapping->student_email))
                                                 <div class="text-xs text-gray-500">{{ $studentMapping->student_email }}</div>
                                             @endif

@@ -97,7 +97,7 @@
                 <tbody>
                     @foreach($subject->studentMappings as $mapping)
                         <tr>
-                            <td class="student-name">{{ $mapping->student_name }}</td>
+                            <td class="student-name">{{ $mapping->formatted_name }}</td>
                             
                             @foreach($classActivities as $activity)
                                 @php

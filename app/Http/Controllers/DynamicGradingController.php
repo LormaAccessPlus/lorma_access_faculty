@@ -132,7 +132,7 @@ class DynamicGradingController extends Controller
             'components.*.name' => 'required|string',
             'components.*.type' => 'required|string',
             'components.*.weight' => 'required|numeric|min:0|max:100',
-            'components.*.formula' => 'nullable|string',
+            'components.*.formula' => 'required|string',
             'term_formula' => 'nullable|string',
         ]);
 
@@ -284,14 +284,23 @@ class DynamicGradingController extends Controller
             abort(403);
         }
 
+        // Auto-suggest correct component based on item name
+        $suggestedComponent = $this->suggestCorrectComponent($request->item_name, $component->gradingClass);
+        $actualComponentId = $suggestedComponent ? $suggestedComponent->id : $component->id;
+        
         ComponentItem::create([
-            'component_id' => $component->id,
+            'component_id' => $actualComponentId,
             'item_name' => $request->item_name,
             'max_score' => $request->max_score,
             'date' => $request->date,
         ]);
 
-        return back()->with('success', 'Item added successfully.');
+        $message = 'Item added successfully.';
+        if ($suggestedComponent && $suggestedComponent->id !== $component->id) {
+            $message .= " Note: Item was automatically moved to '{$suggestedComponent->component_name}' component based on its name.";
+        }
+
+        return back()->with('success', $message);
     }
 
     public function saveGrade(Request $request)
@@ -476,6 +485,9 @@ class DynamicGradingController extends Controller
                 return response()->json(['success' => false, 'message' => 'Failed to authenticate with Google Classroom']);
             }
 
+            // First, import and categorize new assignments from Google Classroom
+            $this->importAndCategorizeAssignments($gradingClass, $classroomService);
+
             $importedCount = 0;
             $skippedNoActivityId = 0;
             $skippedNoGcrId = 0;
@@ -644,8 +656,21 @@ class DynamicGradingController extends Controller
             'components.*.name' => 'required|string',
             'components.*.weight' => 'required|numeric|min:0|max:100',
             'term_weights' => 'required|array',
-            'component_formulas' => 'nullable|array',
+            'component_formulas' => 'required|array',
         ]);
+        
+        // Validate that all components (except final_grade) have formulas
+        foreach ($request->components as $component) {
+            if ($component['name'] !== 'final_grade') {
+                if (!isset($request->component_formulas[$component['name']]) || 
+                    empty(trim($request->component_formulas[$component['name']]))) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Formula is required for component: {$component['name']}"
+                    ], 400);
+                }
+            }
+        }
         
         $total = collect($request->components)->sum('weight');
         if ($total != 100) {
@@ -1011,6 +1036,337 @@ class DynamicGradingController extends Controller
         
         $filename = $subject->subject_code . '_Full_Matrix_' . date('Y-m-d') . '.pdf';
         return $pdf->download($filename);
+    }
+
+    /**
+     * Import and categorize assignments from Google Classroom
+     */
+    private function importAndCategorizeAssignments($gradingClass, $classroomService)
+    {
+        try {
+            $subject = $gradingClass->subject;
+            
+            // Get categorized coursework from Google Classroom
+            $categorizedWork = $classroomService->getCategorizedCourseWork($subject->gcr_class_id);
+            
+            // Find Activities and Quizzes components
+            $activitiesComponent = $gradingClass->components->where('component_name', 'Activities')->first();
+            $quizzesComponent = $gradingClass->components->where('component_name', 'Quizzes')->first();
+            
+            if (!$activitiesComponent || !$quizzesComponent) {
+                Log::info('No Activities or Quizzes components found for auto-categorization');
+                return;
+            }
+            
+            // Import activities
+            foreach ($categorizedWork['activities'] as $work) {
+                $this->importAssignmentToComponent($work, $activitiesComponent, $subject);
+            }
+            
+            // Import quizzes
+            foreach ($categorizedWork['quizzes'] as $work) {
+                $this->importAssignmentToComponent($work, $quizzesComponent, $subject);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Error importing and categorizing assignments', [
+                'grading_class_id' => $gradingClass->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * Import a single assignment to a specific component
+     */
+    private function importAssignmentToComponent($work, $component, $subject)
+    {
+        try {
+            // Determine if this assignment belongs to this term based on naming
+            $assignmentTerm = $this->determineAssignmentTerm($work['title']);
+            $currentTerm = $component->gradingClass->term;
+            
+            // Only import if the assignment belongs to this term
+            if ($assignmentTerm && $assignmentTerm !== $currentTerm) {
+                Log::info('Skipping assignment - wrong term', [
+                    'assignment' => $work['title'],
+                    'assignment_term' => $assignmentTerm,
+                    'current_term' => $currentTerm
+                ]);
+                return;
+            }
+            
+            // Check if activity already exists
+            $existingActivity = Activity::where('subject_id', $subject->id)
+                ->where('gcr_assignment_id', $work['id'])
+                ->first();
+            
+            if (!$existingActivity) {
+                // Create new activity
+                $existingActivity = Activity::create([
+                    'subject_id' => $subject->id,
+                    'name' => $work['title'],
+                    'description' => $work['description'] ?? '',
+                    'max_score' => $work['max_points'] ?? 100,
+                    'gcr_assignment_id' => $work['id'],
+                    'type' => 'lecture', // Default type
+                    'term' => $currentTerm
+                ]);
+            }
+            
+            // Check if component item already exists in ANY component for this grading class
+            $existingItem = ComponentItem::whereHas('component', function($query) use ($component) {
+                    $query->where('grading_class_id', $component->grading_class_id);
+                })
+                ->where('activity_id', $existingActivity->id)
+                ->first();
+            
+            if (!$existingItem) {
+                // Create component item
+                ComponentItem::create([
+                    'component_id' => $component->id,
+                    'item_name' => $work['title'],
+                    'max_score' => $work['max_points'] ?? 100,
+                    'activity_id' => $existingActivity->id,
+                    'date' => now()
+                ]);
+                
+                Log::info('Auto-categorized assignment', [
+                    'assignment' => $work['title'],
+                    'component' => $component->component_name,
+                    'term' => $currentTerm
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Error importing assignment to component', [
+                'assignment_id' => $work['id'],
+                'assignment_title' => $work['title'],
+                'component_id' => $component->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * Determine which term an assignment belongs to based on its name
+     */
+    private function determineAssignmentTerm($assignmentName)
+    {
+        $name = strtolower($assignmentName);
+        
+        // Prelim patterns
+        if (preg_match('/^a\d+|prelim|^quiz\s*\d*$/i', $assignmentName)) {
+            return 'prelim';
+        }
+        
+        // Midterm patterns
+        if (preg_match('/^m\d+|^mq\d+|midterm/i', $assignmentName)) {
+            return 'midterm';
+        }
+        
+        // Finals patterns
+        if (preg_match('/^f\d+|^fq\d+|finals?/i', $assignmentName)) {
+            return 'finals';
+        }
+        
+        // If no pattern matches, return null (import to current term)
+        return null;
+    }
+
+    /**
+     * Move an item to a different component
+     */
+    public function moveItemToComponent(Request $request, $itemId)
+    {
+        $request->validate([
+            'target_component_id' => 'required|exists:grading_components,id',
+        ]);
+
+        $faculty = auth('faculty')->user();
+        
+        $item = ComponentItem::findOrFail($itemId);
+        $currentComponent = $item->component;
+        $targetComponent = GradingComponent::findOrFail($request->target_component_id);
+        
+        // Verify faculty owns both components
+        if ($currentComponent->gradingClass->faculty_id !== $faculty->id || 
+            $targetComponent->gradingClass->faculty_id !== $faculty->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        
+        // Verify both components belong to the same grading class
+        if ($currentComponent->grading_class_id !== $targetComponent->grading_class_id) {
+            return response()->json(['success' => false, 'message' => 'Components must be from the same term'], 400);
+        }
+        
+        $item->update(['component_id' => $request->target_component_id]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => "Item '{$item->item_name}' moved from '{$currentComponent->component_name}' to '{$targetComponent->component_name}'"
+        ]);
+    }
+
+    /**
+     * Suggest the correct component based on item name patterns
+     */
+    private function suggestCorrectComponent($itemName, $gradingClass)
+    {
+        $components = $gradingClass->components;
+        
+        // Find Activities and Quizzes components
+        $activitiesComponent = $components->where('component_name', 'Activities')->first();
+        $quizzesComponent = $components->where('component_name', 'Quizzes')->first();
+        
+        if (!$activitiesComponent || !$quizzesComponent) {
+            return null; // No auto-suggestion if components don't exist
+        }
+        
+        // Check if item name suggests it's a quiz
+        if (preg_match('/Q\d+|quiz/i', $itemName)) {
+            return $quizzesComponent;
+        }
+        
+        // Check if item name suggests it's an activity
+        if (preg_match('/^[A-Z]\d+$|activity/i', $itemName) && !preg_match('/Q|quiz/i', $itemName)) {
+            return $activitiesComponent;
+        }
+        
+        return null; // No suggestion
+    }
+
+    public function exportTermCsv(Request $request, $gradingClassId)
+    {
+        try {
+            $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
+            
+            $gradingClass = GradingClass::where('id', $gradingClassId)
+                ->where('faculty_id', $faculty->id)
+                ->with(['subject', 'components.items.grades'])
+                ->firstOrFail();
+            
+            $subject = $gradingClass->subject;
+        
+        // Get students for this class
+        $students = StudentMapping::where('subject_id', $subject->id)
+            ->whereNotNull('gcr_student_id')
+            ->orderBy('student_name')
+            ->get();
+        
+        $filename = "{$subject->subject_code}_{$gradingClass->term}_grades_" . date('Y-m-d') . ".csv";
+        
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+        
+        $callback = function() use ($gradingClass, $students) {
+            $file = fopen('php://output', 'w');
+            
+            // Header row
+            $header = ['Student Name'];
+            
+            // Add component item headers
+            foreach ($gradingClass->components as $component) {
+                foreach ($component->items as $item) {
+                    $header[] = $item->item_name . ' (Raw)';
+                    $header[] = $item->item_name . ' (Computed)';
+                }
+                $header[] = $component->component_name . ' Average';
+            }
+            $header[] = 'Term Grade';
+            
+            fputcsv($file, $header);
+            
+            // Data rows
+            foreach ($students as $student) {
+                $row = [$student->student_name];
+                $termGradeComponents = [];
+                
+                foreach ($gradingClass->components as $component) {
+                    $componentTotal = 0;
+                    $componentCount = 0;
+                    
+                    foreach ($component->items as $item) {
+                        $grade = $item->grades->where('student_mapping_id', $student->id)->first();
+                        
+                        // Raw score
+                        $row[] = $grade ? ($grade->score ?? '') : '';
+                        
+                        // Computed score
+                        $row[] = $grade ? ($grade->computed_score ?? '') : '';
+                        
+                        if ($grade && $grade->computed_score !== null) {
+                            $componentTotal += $grade->computed_score;
+                            $componentCount++;
+                        }
+                    }
+                    
+                    // Component average
+                    $componentAvg = $componentCount > 0 ? $componentTotal / $componentCount : null;
+                    $row[] = $componentAvg !== null ? number_format($componentAvg, 2) : '';
+                    
+                    if ($componentAvg !== null) {
+                        $termGradeComponents[] = $componentAvg * ($component->weight_percentage / 100);
+                    }
+                }
+                
+                // Term grade
+                $termGrade = count($termGradeComponents) > 0 ? array_sum($termGradeComponents) : null;
+                $row[] = $termGrade !== null ? number_format($termGrade, 2) : '';
+                
+                fputcsv($file, $row);
+            }
+            
+            fclose($file);
+        };
+        
+        return response()->stream($callback, 200, $headers);
+        
+        } catch (\Exception $e) {
+            Log::error('Error exporting term CSV', [
+                'grading_class_id' => $gradingClassId,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->with('error', 'Failed to export CSV: ' . $e->getMessage());
+        }
+    }
+
+    public function exportTermPdf(Request $request, $gradingClassId)
+    {
+        try {
+            $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
+            
+            $gradingClass = GradingClass::where('id', $gradingClassId)
+                ->where('faculty_id', $faculty->id)
+                ->with(['subject', 'components.items.grades'])
+                ->firstOrFail();
+            
+            $subject = $gradingClass->subject;
+            
+            // Get students for this class
+            $students = StudentMapping::where('subject_id', $subject->id)
+                ->whereNotNull('gcr_student_id')
+                ->orderBy('student_name')
+                ->get();
+            
+            $pdf = \PDF::loadView('grading.exports.term-pdf', compact('gradingClass', 'subject', 'students', 'faculty'));
+            
+            $pdf->setPaper('legal', 'landscape');
+            
+            $filename = $subject->subject_code . '_' . ucfirst($gradingClass->term) . '_Grades_' . date('Y-m-d') . '.pdf';
+            return $pdf->download($filename);
+            
+        } catch (\Exception $e) {
+            Log::error('Error exporting term PDF', [
+                'grading_class_id' => $gradingClassId,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->with('error', 'Failed to export PDF: ' . $e->getMessage());
+        }
     }
 
 }
