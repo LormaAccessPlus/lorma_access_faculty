@@ -310,36 +310,42 @@
 
         <!-- Export Actions -->
         <div class="mt-6 bg-white rounded-lg shadow-sm border p-4">
-            <h3 class="text-lg font-medium text-gray-900 mb-4">Export Options</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <a href="{{ route('grades.export.term', [$subject, $term]) }}" 
-                   class="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <i class="fas fa-file-pdf text-red-500 text-2xl mr-3"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Export {{ ucfirst($term) }} Term</h3>
+            <div class="flex gap-4">
+                <button onclick="exportTermPDF()" 
+                   class="flex items-center px-6 py-3 border border-gray-300 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors">
+                    <i class="fas fa-file-pdf text-red-500 text-xl mr-3"></i>
                     <div>
-                        <div class="font-medium text-gray-900">Export {{ ucfirst($term) }} Grades</div>
-                        <div class="text-sm text-gray-500">Download PDF report</div>
+                        <div class="font-medium text-gray-900">Export as PDF</div>
+                        <div class="text-sm text-gray-500">{{ ucfirst($term) }} term report</div>
                     </div>
-                </a>
+                </button>
                 
-                <a href="{{ route('grades.export.activities', $subject) }}" 
-                   class="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <i class="fas fa-file-pdf text-red-500 text-2xl mr-3"></i>
+                <button onclick="exportTermCSV()" 
+                   class="flex items-center px-6 py-3 border border-gray-300 rounded-lg hover:bg-green-50 hover:border-green-300 transition-colors">
+                    <i class="fas fa-file-csv text-green-500 text-xl mr-3"></i>
                     <div>
-                        <div class="font-medium text-gray-900">Export All Activities</div>
-                        <div class="text-sm text-gray-500">Download PDF report</div>
+                        <div class="font-medium text-gray-900">Export as CSV</div>
+                        <div class="text-sm text-gray-500">Spreadsheet format</div>
                     </div>
-                </a>
-                
-                <a href="{{ route('grades.export.pp', $subject) }}" 
-                   class="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <i class="fas fa-file-pdf text-red-500 text-2xl mr-3"></i>
-                    <div>
-                        <div class="font-medium text-gray-900">Export Grades (PP)</div>
-                        <div class="text-sm text-gray-500">Download PDF report</div>
-                    </div>
-                </a>
+                </button>
             </div>
         </div>
+
+        <!-- Export Script -->
+        <script>
+        function exportTermPDF() {
+            const deanName = prompt('Enter Dean\'s name for the PDF signature:', '');
+            if (deanName !== null) {
+                window.location.href = '{{ route('archive.export-term-pdf', [$subject, $term]) }}?dean_name=' + encodeURIComponent(deanName);
+            }
+        }
+        
+        function exportTermCSV() {
+            // For now, redirect to full matrix CSV - we can create term-specific CSV later if needed
+            window.location.href = '{{ route('grading.export-full-matrix-csv', $subject->id) }}';
+        }
+        </script>
     @endif
 </div>
 @endsection

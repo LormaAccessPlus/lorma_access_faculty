@@ -75,7 +75,7 @@
 <body>
     <div class="header">
         <h1>Lorma Colleges</h1>
-        <div class="subtitle">ACCESS School Management System</div>
+        <div class="subtitle">Lorma Access+ Grading System</div>
         <div class="title">Grading Sheet</div>
         <div class="semester">
             @php
@@ -103,11 +103,15 @@
                 <th style="width: 7%;">Midterm<br>({{ $termWeights['midterm'] }}%)</th>
                 <th style="width: 7%;">Finals<br>({{ $termWeights['finals'] }}%)</th>
                 @if($matrixComponents->count() > 0)
+                    <th style="width: 7%;">Term Grade<br>({{ $finalRatingFormula['final_grade'] ?? 80 }}%)</th>
+                @endif
+                @if($matrixComponents->count() > 0)
                 @foreach($matrixComponents as $component)
                     <th style="width: 7%;">{{ $component->component_name }}<br>({{ $finalRatingFormula[$component->component_name] ?? 0 }}%)</th>
                 @endforeach
                 @endif
-                <th style="width: 7%;">Final Rating</th>
+                <th style="width: 7%;">Final Grade<br>(Raw)</th>
+                <th style="width: 7%;">Final Rating<br>(Rounded)</th>
                 <th style="width: 8%;">Status</th>
             </tr>
         </thead>
@@ -181,6 +185,10 @@
                         }
                     @endphp
                     
+                    @if($matrixComponents->count() > 0)
+                        <td>{{ $finalGrade > 0 ? number_format($finalGrade, 2) : '' }}</td>
+                    @endif
+                    
                     @foreach($matrixComponents as $component)
                         @php
                             $score = $component->scores->where('student_mapping_id', $student->id)->first();
@@ -203,9 +211,20 @@
                         <td>{{ $score && $score->score !== null ? $score->score : '' }}</td>
                     @endforeach
                     
-                    <td class="final-rating">{{ $finalRating > 0 ? round($finalRating) : '' }}</td>
-                    <td class="{{ $finalRating >= 75 ? 'passed' : 'failed' }}">
-                        {{ $finalRating >= 75 ? 'Passed' : ($finalRating > 0 ? 'Failed' : '') }}
+                    @php
+                        // Check if there's a saved final rating in the database
+                        $savedFinalRating = \App\Models\FinalRating::where('student_mapping_id', $student->id)
+                            ->where('subject_id', $subject->id)
+                            ->first();
+                        $displayRating = $savedFinalRating && $savedFinalRating->final_rating !== null 
+                            ? round($savedFinalRating->final_rating) 
+                            : round($finalRating);
+                    @endphp
+                    
+                    <td>{{ $finalRating > 0 ? number_format($finalRating, 2) : '' }}</td>
+                    <td class="final-rating">{{ $displayRating > 0 ? $displayRating : '' }}</td>
+                    <td class="{{ $displayRating >= 75 ? 'passed' : 'failed' }}">
+                        {{ $displayRating >= 75 ? 'Passed' : ($displayRating > 0 ? 'Failed' : '') }}
                     </td>
                 </tr>
             @endforeach

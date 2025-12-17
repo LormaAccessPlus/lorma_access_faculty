@@ -55,14 +55,33 @@
                     <i class="fas fa-list-alt mr-2"></i>
                     Term Grades
                 </a>
-                <button onclick="exportGrades()"
-                   class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white transition-colors"
-                   style="background-color: #E67E22;"
-                   onmouseover="this.style.backgroundColor='#D35400';"
-                   onmouseout="this.style.backgroundColor='#E67E22';">
-                    <i class="fas fa-file-export mr-2"></i>
-                    Export Grades
-                </button>
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open" 
+                           class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white transition-colors"
+                           style="background-color: #E67E22;"
+                           onmouseover="this.style.backgroundColor='#D35400';"
+                           onmouseout="this.style.backgroundColor='#E67E22';">
+                        <i class="fas fa-file-export mr-2"></i>
+                        Export Full Matrix
+                        <i class="fas fa-chevron-down ml-2 text-xs"></i>
+                    </button>
+                    
+                    <div x-show="open" @click.away="open = false" x-cloak x-transition
+                         class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                        <div class="py-2">
+                            <button onclick="exportFullMatrixPDF(); document.querySelector('[x-data]').__x.$data.open = false;" 
+                               class="w-full flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                <i class="fas fa-file-pdf mr-3 text-red-600"></i>
+                                <div class="font-medium">Export as PDF</div>
+                            </button>
+                            <button onclick="exportFullMatrixCSV(); document.querySelector('[x-data]').__x.$data.open = false;" 
+                               class="w-full flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors">
+                                <i class="fas fa-file-csv mr-3 text-green-600"></i>
+                                <div class="font-medium">Export as CSV</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <a href="{{ route('archive.index') }}" 
                    class="inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md bg-white transition-colors"
                    style="border-color: #08695A; color: #08695A;"
@@ -263,11 +282,15 @@
 
 <!-- Export Script -->
 <script>
-function exportGrades() {
+function exportFullMatrixPDF() {
     const deanName = prompt('Enter Dean\'s name for the PDF signature:', '');
     if (deanName !== null) {
-        window.location.href = '{{ route('grades.export.full-matrix', $subject) }}?dean_name=' + encodeURIComponent(deanName);
+        window.location.href = '{{ route('archive.export-pdf', $subject) }}?dean_name=' + encodeURIComponent(deanName);
     }
+}
+
+function exportFullMatrixCSV() {
+    window.location.href = '{{ route('grading.export-full-matrix-csv', $subject->id) }}';
 }
 </script>
 @endsection

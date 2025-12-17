@@ -262,10 +262,62 @@ class DynamicGradingController extends Controller
         // Get students for this class (only matched students)
         $students = StudentMapping::where('subject_id', $gradingClass->subject_id)
             ->whereNotNull('gcr_student_id')
-            ->orderBy('student_name')
-            ->get();
+            ->get()
+            ->sortBy(function ($student) {
+                $csvData = $student->csv_data ?? [];
+                $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+                $name = $student->student_name;
+                
+                // Sort by gender (M first, then F, then others), then by name
+                $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                return $genderOrder . '_' . $name;
+            })
+            ->values();
 
-        return view('grading.grade-sheet', compact('gradingClass', 'students', 'subject', 'prelim', 'midterm', 'finals'));
+        // Calculate term progress
+        $totalStudents = $students->count();
+        $studentsWithGrades = 0;
+
+        if ($totalStudents > 0 && $gradingClass->components->count() > 0) {
+            foreach ($students as $student) {
+                $hasAllGrades = true;
+                
+                // Check each component
+                foreach ($gradingClass->components as $component) {
+                    if ($component->component_name === 'Exam') {
+                        // Check if exam score exists
+                        $examGrade = \App\Models\StudentGrade::where('grading_class_id', $gradingClass->id)
+                            ->where('student_mapping_id', $student->id)
+                            ->where('component_id', $component->id)
+                            ->first();
+                        
+                        if (!$examGrade || $examGrade->exam_score === null) {
+                            $hasAllGrades = false;
+                            break;
+                        }
+                    } else {
+                        // Check if all items in this component have grades
+                        foreach ($component->items as $item) {
+                            $hasGrade = $item->grades->where('student_mapping_id', $student->id)
+                                ->where('score', '!=', null)
+                                ->isNotEmpty();
+                            if (!$hasGrade) {
+                                $hasAllGrades = false;
+                                break 2; // Break out of both loops
+                            }
+                        }
+                    }
+                }
+                
+                if ($hasAllGrades) {
+                    $studentsWithGrades++;
+                }
+            }
+        }
+
+        $completionPercentage = $totalStudents > 0 ? round(($studentsWithGrades / $totalStudents) * 100) : 0;
+
+        return view('grading.grade-sheet', compact('gradingClass', 'students', 'subject', 'prelim', 'midterm', 'finals', 'studentsWithGrades', 'totalStudents', 'completionPercentage'));
     }
 
     public function addComponentItem(Request $request, $componentId)
@@ -629,8 +681,17 @@ class DynamicGradingController extends Controller
         // Get only matched students (those with gcr_student_id)
         $students = StudentMapping::where('subject_id', $subjectId)
             ->whereNotNull('gcr_student_id')
-            ->orderBy('student_name')
-            ->get();
+            ->get()
+            ->sortBy(function ($student) {
+                $csvData = $student->csv_data ?? [];
+                $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+                $name = $student->student_name;
+                
+                // Sort by gender (M first, then F, then others), then by name
+                $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                return $genderOrder . '_' . $name;
+            })
+            ->values();
         
         // Get custom matrix components
         $matrixComponents = $subject->matrixComponents;
@@ -789,11 +850,20 @@ class DynamicGradingController extends Controller
             ->orderByRaw("FIELD(term, 'prelim', 'midterm', 'finals')")
             ->get();
         
-        // Get students
+        // Get students sorted by gender (M first, then F) and then by name
         $students = StudentMapping::where('subject_id', $subjectId)
             ->whereNotNull('gcr_student_id')
-            ->orderBy('student_name')
-            ->get();
+            ->get()
+            ->sortBy(function ($student) {
+                $csvData = $student->csv_data ?? [];
+                $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+                $name = $student->student_name;
+                
+                // Sort by gender (M first, then F, then others), then by name
+                $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                return $genderOrder . '_' . $name;
+            })
+            ->values();
         
         // Get matrix components
         $matrixComponents = $subject->matrixComponents;
@@ -840,7 +910,8 @@ class DynamicGradingController extends Controller
             foreach ($matrixComponents as $component) {
                 $header[] = $component->component_name;
             }
-            $header[] = 'Final Rating';
+            $header[] = 'Final Grade (Raw)';
+            $header[] = 'Final Rating (Rounded)';
             $header[] = 'Status';
             
             fputcsv($file, $header);
@@ -900,8 +971,20 @@ class DynamicGradingController extends Controller
                     }
                 }
                 
-                $row[] = $finalRating > 0 ? round($finalRating) : '';
-                $row[] = $finalRating >= 75 ? 'Passed' : ($finalRating > 0 ? 'Failed' : '');
+                // Add Final Grade (raw with decimals)
+                $row[] = $finalRating > 0 ? number_format($finalRating, 2) : '';
+                
+                // Check if there's a saved final rating in the database
+                $savedFinalRating = \App\Models\FinalRating::where('student_mapping_id', $student->id)
+                    ->where('subject_id', $subject->id)
+                    ->first();
+                $displayRating = $savedFinalRating && $savedFinalRating->final_rating !== null 
+                    ? round($savedFinalRating->final_rating) 
+                    : round($finalRating);
+                
+                // Add Final Rating (rounded, using saved value if exists)
+                $row[] = $displayRating > 0 ? $displayRating : '';
+                $row[] = $displayRating >= 75 ? 'Passed' : ($displayRating > 0 ? 'Failed' : '');
                 
                 fputcsv($file, $row);
             }
@@ -925,8 +1008,14 @@ class DynamicGradingController extends Controller
                     ->first();
                 
                 if ($examGrade && $examGrade->exam_score !== null) {
-                    $examMaxScore = $component->exam_max_score ?? 100;
-                    $examComputedScore = ($examGrade->exam_score / $examMaxScore) * 100;
+                    // Use computed_score if available (applies configured formula)
+                    if ($examGrade->computed_score !== null) {
+                        $examComputedScore = $examGrade->computed_score;
+                    } else {
+                        // Fallback to raw percentage calculation
+                        $examMaxScore = $component->exam_max_score ?? 100;
+                        $examComputedScore = ($examGrade->exam_score / $examMaxScore) * 100;
+                    }
                     $termGrade += $examComputedScore * ($component->weight_percentage / 100);
                     $totalWeight += $component->weight_percentage;
                 }
@@ -1003,11 +1092,20 @@ class DynamicGradingController extends Controller
             ->orderByRaw("FIELD(term, 'prelim', 'midterm', 'finals')")
             ->get();
         
-        // Get students
+        // Get students sorted by gender (M first, then F) and then by name
         $students = StudentMapping::where('subject_id', $subjectId)
             ->whereNotNull('gcr_student_id')
-            ->orderBy('student_name')
-            ->get();
+            ->get()
+            ->sortBy(function ($student) {
+                $csvData = $student->csv_data ?? [];
+                $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+                $name = $student->student_name;
+                
+                // Sort by gender (M first, then F, then others), then by name
+                $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                return $genderOrder . '_' . $name;
+            })
+            ->values();
         
         // Get matrix components
         $matrixComponents = $subject->matrixComponents;
@@ -1362,6 +1460,97 @@ class DynamicGradingController extends Controller
         } catch (\Exception $e) {
             Log::error('Error exporting term PDF', [
                 'grading_class_id' => $gradingClassId,
+                'error' => $e->getMessage()
+            ]);
+            
+            return back()->with('error', 'Failed to export PDF: ' . $e->getMessage());
+        }
+    }
+
+    public function saveFinalRating(Request $request)
+    {
+        try {
+            $request->validate([
+                'student_mapping_id' => 'required|exists:student_mappings,id',
+                'subject_id' => 'required|exists:subjects,id',
+                'final_rating' => 'nullable|numeric|min:0|max:100'
+            ]);
+
+            $studentMapping = StudentMapping::findOrFail($request->student_mapping_id);
+            $subject = Subject::findOrFail($request->subject_id);
+
+            // Get or create final rating record
+            $finalRating = \App\Models\FinalRating::updateOrCreate(
+                [
+                    'student_mapping_id' => $request->student_mapping_id,
+                    'subject_id' => $request->subject_id,
+                    'academic_year' => config('app.current_academic_year', '2024-2025'),
+                    'semester' => config('app.current_semester', '1')
+                ],
+                [
+                    'final_rating' => $request->final_rating
+                ]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Final rating saved successfully',
+                'final_rating' => $finalRating->final_rating
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error saving final rating: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error saving final rating: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function exportAllTermsPdf(Request $request, $subjectId)
+    {
+        try {
+            $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
+            
+            $subject = Subject::where('id', $subjectId)
+                ->where('faculty_id', $faculty->id)
+                ->firstOrFail();
+            
+            // Get all grading classes for this subject (Prelim, Midterm, Finals)
+            $gradingClasses = GradingClass::where('subject_id', $subjectId)
+                ->where('faculty_id', $faculty->id)
+                ->with(['components.items.grades'])
+                ->orderByRaw("FIELD(term, 'prelim', 'midterm', 'finals')")
+                ->get();
+            
+            // Get students sorted by gender
+            $students = StudentMapping::where('subject_id', $subjectId)
+                ->whereNotNull('gcr_student_id')
+                ->get()
+                ->sortBy(function ($student) {
+                    $csvData = $student->csv_data ?? [];
+                    $gender = strtoupper($csvData['gender'] ?? 'Z');
+                    $name = $student->student_name;
+                    $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                    return $genderOrder . '_' . $name;
+                })
+                ->values();
+            
+            $pdf = \PDF::loadView('grading.exports.all-terms-pdf', compact(
+                'subject',
+                'faculty',
+                'gradingClasses',
+                'students'
+            ));
+            
+            $pdf->setPaper('legal', 'landscape');
+            
+            $filename = $subject->subject_code . '_All_Terms_' . date('Y-m-d') . '.pdf';
+            return $pdf->download($filename);
+            
+        } catch (\Exception $e) {
+            Log::error('Error exporting all terms PDF', [
+                'subject_id' => $subjectId,
                 'error' => $e->getMessage()
             ]);
             

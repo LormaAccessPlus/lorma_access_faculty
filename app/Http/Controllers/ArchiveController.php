@@ -50,12 +50,23 @@ class ArchiveController extends Controller
                 $query->orderBy('term')->orderBy('type')->orderBy('created_at');
             },
             'studentMappings' => function ($query) {
-                $query->whereNotNull('gcr_student_id')->orderBy('student_name');
+                $query->whereNotNull('gcr_student_id');
             },
             'gradingClasses' => function ($query) {
                 $query->with(['components'])->orderByRaw("FIELD(term, 'prelim', 'midterm', 'finals')");
             }
         ]);
+
+        // Sort students by gender (M first, then F) and then by name
+        $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+            $csvData = $student->csv_data ?? [];
+            $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+            $name = $student->student_name;
+            
+            // Sort by gender (M first, then F, then others), then by name
+            $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+            return $genderOrder . '_' . $name;
+        })->values();
 
         // Get grading classes for this subject
         $gradingClasses = $subject->gradingClasses;
@@ -105,8 +116,14 @@ class ArchiveController extends Controller
                     ->first();
                 
                 if ($examGrade && $examGrade->exam_score !== null) {
-                    $examMaxScore = $component->exam_max_score ?? 100;
-                    $examComputedScore = ($examGrade->exam_score / $examMaxScore) * 100;
+                    // Use computed_score if available (applies configured formula)
+                    if ($examGrade->computed_score !== null) {
+                        $examComputedScore = $examGrade->computed_score;
+                    } else {
+                        // Fallback to raw percentage calculation
+                        $examMaxScore = $component->exam_max_score ?? 100;
+                        $examComputedScore = ($examGrade->exam_score / $examMaxScore) * 100;
+                    }
                     $termGrade += $examComputedScore * ($component->weight_percentage / 100);
                     $totalWeight += $component->weight_percentage;
                 }
@@ -133,6 +150,155 @@ class ArchiveController extends Controller
         }
         
         return $termGrade;
+    }
+
+    /**
+     * Export archived subject full matrix to PDF
+     */
+    public function exportFullMatrixPDF(Request $request, $id)
+    {
+        $faculty = auth('faculty')->user();
+        $subject = Subject::where('id', $id)
+            ->where('faculty_id', $faculty->id)
+            ->archived()
+            ->firstOrFail();
+
+        // Load subject with relationships (only matched students)
+        $subject->load([
+            'studentMappings' => function ($query) {
+                $query->whereNotNull('gcr_student_id');
+            },
+            'gradingClasses' => function ($query) {
+                $query->with(['components' => function($q) {
+                    $q->with('items');
+                }])->orderByRaw("FIELD(term, 'prelim', 'midterm', 'finals')");
+            }
+        ]);
+
+        // Sort students by gender (M first, then F) and then by name
+        $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+            $csvData = $student->csv_data ?? [];
+            $gender = strtoupper($csvData['gender'] ?? 'Z');
+            $name = $student->student_name;
+            
+            $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+            return $genderOrder . '_' . $name;
+        })->values();
+
+        // Get grading classes
+        $gradingClasses = $subject->gradingClasses;
+
+        // Get dean name from request
+        $deanName = $request->input('dean_name', '');
+        $adviserName = $faculty ? $faculty->name : '';
+
+        try {
+            // Log debug info
+            \Log::info('Exporting archived PDF', [
+                'subject_id' => $subject->id,
+                'students_count' => $subject->studentMappings->count(),
+                'grading_classes_count' => $gradingClasses->count(),
+                'dean_name' => $deanName,
+                'adviser_name' => $adviserName
+            ]);
+            
+            $pdf = \PDF::loadView('grades.exports.archived-full-matrix', compact(
+                'subject',
+                'gradingClasses',
+                'deanName',
+                'adviserName'
+            ));
+            
+            $pdf->setPaper('legal', 'landscape');
+            
+            return $pdf->download($subject->subject_code . '_Full_Matrix.pdf');
+        } catch (\Exception $e) {
+            \Log::error('Failed to export archived PDF', [
+                'subject_id' => $subject->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return back()->with('error', 'Failed to export PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Export archived subject term grades to PDF
+     */
+    public function exportTermGradesPDF(Request $request, $id, $term)
+    {
+        $faculty = auth('faculty')->user();
+        $subject = Subject::where('id', $id)
+            ->where('faculty_id', $faculty->id)
+            ->archived()
+            ->firstOrFail();
+
+        // Validate term
+        $validTerms = ['prelim', 'midterm', 'finals'];
+        if (!in_array($term, $validTerms)) {
+            abort(404, 'Invalid term');
+        }
+
+        // Load subject with relationships (only matched students)
+        $subject->load([
+            'studentMappings' => function ($query) {
+                $query->whereNotNull('gcr_student_id');
+            },
+            'gradingClasses' => function ($query) {
+                $query->with(['components' => function($q) {
+                    $q->with('items');
+                }])->orderByRaw("FIELD(term, 'prelim', 'midterm', 'finals')");
+            }
+        ]);
+
+        // Sort students by gender (M first, then F) and then by name
+        $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+            $csvData = $student->csv_data ?? [];
+            $gender = strtoupper($csvData['gender'] ?? 'Z');
+            $name = $student->student_name;
+            
+            $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+            return $genderOrder . '_' . $name;
+        })->values();
+
+        // Get grading classes
+        $gradingClasses = $subject->gradingClasses;
+
+        // Get dean name from request
+        $deanName = $request->input('dean_name', '');
+        $adviserName = $faculty ? $faculty->name : '';
+
+        try {
+            \Log::info('Exporting archived term PDF', [
+                'subject_id' => $subject->id,
+                'term' => $term,
+                'students_count' => $subject->studentMappings->count(),
+                'dean_name' => $deanName,
+                'adviser_name' => $adviserName
+            ]);
+            
+            $pdf = \PDF::loadView('grades.exports.archived-term-grades', compact(
+                'subject',
+                'gradingClasses',
+                'term',
+                'deanName',
+                'adviserName'
+            ));
+            
+            $pdf->setPaper('legal', 'landscape');
+            
+            return $pdf->download($subject->subject_code . '_' . ucfirst($term) . '_Grades.pdf');
+        } catch (\Exception $e) {
+            \Log::error('Failed to export archived term PDF', [
+                'subject_id' => $subject->id,
+                'term' => $term,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return back()->with('error', 'Failed to export PDF: ' . $e->getMessage());
+        }
     }
 
     /**

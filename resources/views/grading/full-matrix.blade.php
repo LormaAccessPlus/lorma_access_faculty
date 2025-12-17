@@ -150,8 +150,13 @@
                                     </div>
                                 </th>
                             @endforeach
+                            <th class="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider bg-blue-100">
+                                Final Grade
+                                <div class="text-xs text-gray-500 mt-0.5 font-normal">(Raw)</div>
+                            </th>
                             <th class="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider bg-indigo-50">
                                 Final Rating
+                                <div class="text-xs text-gray-500 mt-0.5 font-normal">(Rounded)</div>
                             </th>
                             <th class="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50">
                                 Status
@@ -308,18 +313,39 @@
                                            placeholder="0">
                                 </td>
                             @endforeach
-                            <td class="px-6 py-4 text-center">
+                            <td class="px-6 py-4 text-center bg-blue-50">
                                 @if($finalRating > 0)
-                                    <span class="text-lg font-bold text-gray-900">{{ round($finalRating) }}</span>
+                                    <span class="text-base font-semibold text-blue-900">{{ number_format($finalRating, 2) }}</span>
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 text-center">
                                 @php
-                                    $isPassed = $finalRating >= 75;
+                                    // Check if there's a saved final rating in the database
+                                    $savedFinalRating = \App\Models\FinalRating::where('student_mapping_id', $student->id)
+                                        ->where('subject_id', $subject->id)
+                                        ->first();
+                                    $displayRating = $savedFinalRating && $savedFinalRating->final_rating !== null 
+                                        ? round($savedFinalRating->final_rating) 
+                                        : round($finalRating);
                                 @endphp
-                                @if($finalRating > 0)
+                                <input type="number" 
+                                       class="final-rating-input w-20 px-2 py-1 text-center border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg font-bold"
+                                       data-student="{{ $student->id }}"
+                                       data-subject="{{ $subject->id }}"
+                                       value="{{ $displayRating > 0 ? intval($displayRating) : '' }}"
+                                       min="0"
+                                       max="100"
+                                       step="1"
+                                       placeholder="0">
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                @php
+                                    // Use the display rating (saved/edited value) for status check
+                                    $isPassed = $displayRating >= 75;
+                                @endphp
+                                @if($displayRating > 0)
                                     <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ $isPassed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
                                         <i class="fas fa-{{ $isPassed ? 'check' : 'times' }}-circle mr-1"></i>
                                         {{ $isPassed ? 'Passed' : 'Failed' }}
@@ -331,7 +357,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $gradingClasses->count() + $matrixComponents->count() + ($matrixComponents->count() > 0 ? 4 : 3) }}" class="px-6 py-12 text-center">
+                            <td colspan="{{ $gradingClasses->count() + $matrixComponents->count() + ($matrixComponents->count() > 0 ? 5 : 4) }}" class="px-6 py-12 text-center">
                                 <div class="flex flex-col items-center justify-center">
                                     <i class="fas fa-users text-gray-300 text-5xl mb-4"></i>
                                     <h3 class="text-lg font-semibold text-gray-900 mb-2">No Students Found</h3>
@@ -783,6 +809,75 @@ function saveMatrixScore(input) {
                 location.reload();
             }, 500);
         }
+    });
+}
+
+// Save final rating
+document.querySelectorAll('.final-rating-input').forEach(input => {
+    let timeout;
+    input.addEventListener('input', function() {
+        // Update status badge immediately
+        updateStatusBadge(this);
+        
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            saveFinalRating(this);
+        }, 800);
+    });
+});
+
+function updateStatusBadge(input) {
+    const rating = parseFloat(input.value) || 0;
+    const row = input.closest('tr');
+    const statusCell = row.querySelector('td:last-child');
+    
+    if (rating > 0) {
+        const isPassed = rating >= 75;
+        const badgeClass = isPassed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+        const icon = isPassed ? 'check' : 'times';
+        const text = isPassed ? 'Passed' : 'Failed';
+        
+        statusCell.innerHTML = `
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}">
+                <i class="fas fa-${icon}-circle mr-1"></i>
+                ${text}
+            </span>
+        `;
+    } else {
+        statusCell.innerHTML = '<span class="text-gray-400 text-sm">-</span>';
+    }
+}
+
+function saveFinalRating(input) {
+    const data = {
+        student_mapping_id: input.dataset.student,
+        subject_id: input.dataset.subject,
+        final_rating: input.value || null
+    };
+    
+    fetch('{{ route("grading.save-final-rating") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success feedback
+            input.classList.add('border-green-500');
+            setTimeout(() => {
+                input.classList.remove('border-green-500');
+            }, 1000);
+        } else {
+            alert('Error saving final rating: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving final rating');
     });
 }
 </script>

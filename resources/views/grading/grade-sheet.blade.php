@@ -125,20 +125,12 @@
                             <div class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100">
                                 Export Options
                             </div>
-                            <a href="{{ route('grading.export-term-csv', $gradingClass->id) }}" 
-                               class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors">
-                                <i class="fas fa-file-csv mr-3 text-green-600"></i>
-                                <div>
-                                    <div class="font-medium">Export as CSV</div>
-                                    <div class="text-xs text-gray-500">Spreadsheet format</div>
-                                </div>
-                            </a>
-                            <a href="{{ route('grading.export-term-pdf', $gradingClass->id) }}" 
+                            <a href="{{ route('grading.export-all-terms-pdf', $subject->id) }}" 
                                class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors">
                                 <i class="fas fa-file-pdf mr-3 text-red-600"></i>
                                 <div>
-                                    <div class="font-medium">Export as PDF</div>
-                                    <div class="text-xs text-gray-500">Printable format</div>
+                                    <div class="font-medium">Export All Terms (PDF)</div>
+                                    <div class="text-xs text-gray-500">Prelim, Midterm & Finals with scores</div>
                                 </div>
                             </a>
                         </div>
@@ -178,12 +170,12 @@
                         {{ ucfirst($gradingClass->term) }} Term Progress
                     </h3>
                     <p class="text-sm text-gray-600">
-                        0 of {{ $students->count() }} students completed
+                        {{ $studentsWithGrades ?? 0 }} of {{ $totalStudents ?? $students->count() }} students completed
                     </p>
                 </div>
                 <div class="flex items-center gap-3">
                     <div class="text-right">
-                        <div class="text-3xl font-bold text-gray-900">0%</div>
+                        <div class="text-3xl font-bold text-gray-900">{{ $completionPercentage ?? 0 }}%</div>
                     </div>
                     <div class="flex gap-2">
                         <a href="{{ route('grading.full-matrix', $subject->id) }}" 

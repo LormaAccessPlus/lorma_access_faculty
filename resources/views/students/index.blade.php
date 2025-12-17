@@ -46,7 +46,6 @@
     $matchRate = $totalStudents > 0 ? round(($totalMatched / $totalStudents) * 100) : 0;
 @endphp
 
-@if($totalStudents > 0)
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
     <!-- Total Students -->
     <div class="bg-white rounded-lg shadow-sm p-6">
@@ -108,7 +107,6 @@
         </div>
     </div>
 </div>
-@endif
 
 <!-- Search and Filter -->
 <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -183,37 +181,27 @@
                     @endif
                 </div>
                 
-                @if($studentCount > 0)
-                    <!-- Progress Bar -->
-                    <div class="mb-4">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs text-gray-600">Match Progress</span>
-                            <span class="text-xs font-semibold text-gray-900">{{ $matchedCount }}/{{ $studentCount }}</span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="h-2 rounded-full {{ $matchPercentage == 100 ? 'bg-green-500' : 'bg-yellow-500' }}" 
-                                 style="width: {{ $matchPercentage }}%"></div>
-                        </div>
+                <!-- Progress Bar -->
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs text-gray-600">Match Progress</span>
+                        <span class="text-xs font-semibold text-gray-900">{{ $matchedCount }}/{{ $studentCount }}</span>
                     </div>
-                    
-                    <!-- Stats -->
-                    <div class="flex gap-2 mb-4">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            <i class="fas fa-users mr-1"></i> {{ $studentCount }} Students
-                        </span>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <i class="fas fa-check mr-1"></i> {{ $matchedCount }} Matched
-                        </span>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full {{ $matchPercentage == 100 ? 'bg-green-500' : ($studentCount > 0 ? 'bg-yellow-500' : 'bg-gray-300') }}" 
+                             style="width: {{ $matchPercentage }}%"></div>
                     </div>
-                @else
-                    <!-- No Students State -->
-                    <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                        <div class="flex items-center text-gray-600">
-                            <i class="fas fa-info-circle mr-2"></i>
-                            <span class="text-sm">No students imported yet</span>
-                        </div>
-                    </div>
-                @endif
+                </div>
+                
+                <!-- Stats -->
+                <div class="flex gap-2 mb-4">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <i class="fas fa-users mr-1"></i> {{ $studentCount }} Students
+                    </span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <i class="fas fa-check mr-1"></i> {{ $matchedCount }} Matched
+                    </span>
+                </div>
 
                 <!-- GCR Connection Status -->
                 @if($subject->gcr_class_id)

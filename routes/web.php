@@ -207,6 +207,8 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/', [ArchiveController::class, 'index'])->name('index');
         Route::post('/sync', [ArchiveController::class, 'sync'])->name('sync');
         Route::get('/{subject}', [ArchiveController::class, 'show'])->name('show');
+        Route::get('/{subject}/export-pdf', [ArchiveController::class, 'exportFullMatrixPDF'])->name('export-pdf');
+        Route::get('/{subject}/export-term-pdf/{term}', [ArchiveController::class, 'exportTermGradesPDF'])->name('export-term-pdf');
     });
     
     // Student Mapping Routes
@@ -273,10 +275,12 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::post('/subject/{subjectId}/add-matrix-component', [App\Http\Controllers\DynamicGradingController::class, 'addMatrixComponent'])->name('add-matrix-component');
         Route::post('/matrix-component/{componentId}/save-score', [App\Http\Controllers\DynamicGradingController::class, 'saveMatrixComponentScore'])->name('save-matrix-component-score');
         Route::delete('/matrix-component/{componentId}', [App\Http\Controllers\DynamicGradingController::class, 'deleteMatrixComponent'])->name('delete-matrix-component');
+        Route::post('/save-final-rating', [App\Http\Controllers\DynamicGradingController::class, 'saveFinalRating'])->name('save-final-rating');
         Route::get('/subject/{subjectId}/export-full-matrix-csv', [App\Http\Controllers\DynamicGradingController::class, 'exportFullMatrixCsv'])->name('export-full-matrix-csv');
         Route::get('/subject/{subjectId}/export-full-matrix-pdf', [App\Http\Controllers\DynamicGradingController::class, 'exportFullMatrixPdf'])->name('export-full-matrix-pdf');
         Route::get('/{gradingClassId}/export-term-csv', [App\Http\Controllers\DynamicGradingController::class, 'exportTermCsv'])->name('export-term-csv');
         Route::get('/{gradingClassId}/export-term-pdf', [App\Http\Controllers\DynamicGradingController::class, 'exportTermPdf'])->name('export-term-pdf');
+        Route::get('/subject/{subjectId}/export-all-terms-pdf', [App\Http\Controllers\DynamicGradingController::class, 'exportAllTermsPdf'])->name('export-all-terms-pdf');
     });
     
     // Student Mapping Page (Legacy - keep for now)

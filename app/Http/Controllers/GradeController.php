@@ -39,7 +39,7 @@ class GradeController extends Controller
                 $query->orderBy('term')->orderBy('type')->orderBy('created_at');
             },
             'studentMappings' => function ($query) {
-                $query->whereNotNull('student_id')->orderBy('student_name');
+                $query->whereNotNull('gcr_student_id');
             }
         ]);
 
@@ -67,6 +67,17 @@ class GradeController extends Controller
             }
         }
 
+        // Sort students by gender (M first, then F) and then by name
+        $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+            $csvData = $student->csv_data ?? [];
+            $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+            $name = $student->student_name;
+            
+            // Sort by gender (M first, then F, then others), then by name
+            $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+            return $genderOrder . '_' . $name;
+        })->values();
+
         // Get final rating configuration
         $finalRatingConfig = $subject->final_rating_config ?? [
             'prelim_weight' => 30,
@@ -93,7 +104,7 @@ class GradeController extends Controller
                 $query->orderBy('term')->orderBy('type')->orderBy('created_at');
             },
             'studentMappings' => function ($query) {
-                $query->orderBy('student_name');
+                $query->whereNotNull('gcr_student_id');
             }
         ]);
 
@@ -115,6 +126,17 @@ class GradeController extends Controller
         $termGrades = TermGrade::where('subject_id', $subject->id)
             ->get()
             ->groupBy('student_mapping_id');
+
+        // Sort students by gender (M first, then F) and then by name
+        $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+            $csvData = $student->csv_data ?? [];
+            $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+            $name = $student->student_name;
+            
+            // Sort by gender (M first, then F, then others), then by name
+            $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+            return $genderOrder . '_' . $name;
+        })->values();
 
         // Get final rating configuration
         $finalRatingConfig = $subject->final_rating_config ?? [
@@ -145,6 +167,24 @@ class GradeController extends Controller
 
         // Check if subject is archived
         if ($subject->isArchived()) {
+            // Load student mappings for archived subjects and sort them
+            $subject->load([
+                'studentMappings' => function ($query) {
+                    $query->whereNotNull('gcr_student_id');
+                }
+            ]);
+            
+            // Sort students by gender (M first, then F) and then by name
+            $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+                $csvData = $student->csv_data ?? [];
+                $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+                $name = $student->student_name;
+                
+                // Sort by gender (M first, then F, then others), then by name
+                $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                return $genderOrder . '_' . $name;
+            })->values();
+            
             return view('grades.term-grades-archived', compact('subject', 'term'));
         }
 
@@ -154,9 +194,20 @@ class GradeController extends Controller
                 $query->where('term', $term)->orderBy('type')->orderBy('created_at');
             },
             'studentMappings' => function ($query) {
-                $query->whereNotNull('student_id')->orderBy('student_name');
+                $query->whereNotNull('gcr_student_id');
             }
         ]);
+
+        // Sort students by gender (M first, then F) and then by name
+        $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+            $csvData = $student->csv_data ?? [];
+            $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+            $name = $student->student_name;
+            
+            // Sort by gender (M first, then F, then others), then by name
+            $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+            return $genderOrder . '_' . $name;
+        })->values();
 
         // Get activities grouped by type for the current term
         $lectureActivities = $subject->activities->where('type', 'lecture');
@@ -1316,9 +1367,20 @@ class GradeController extends Controller
                     $query->orderBy('term')->orderBy('type')->orderBy('created_at');
                 },
                 'studentMappings' => function ($query) {
-                    $query->whereNotNull('student_id')->orderBy('student_name');
+                    $query->whereNotNull('gcr_student_id');
                 }
             ]);
+
+            // Sort students by gender (M first, then F) and then by name
+            $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+                $csvData = $student->csv_data ?? [];
+                $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+                $name = $student->student_name;
+                
+                // Sort by gender (M first, then F, then others), then by name
+                $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                return $genderOrder . '_' . $name;
+            })->values();
 
             $activitiesByTerm = $subject->activities->groupBy('term');
             
@@ -1359,9 +1421,20 @@ class GradeController extends Controller
             
             $subject->load([
                 'studentMappings' => function ($query) {
-                    $query->whereNotNull('student_id')->orderBy('student_name');
+                    $query->whereNotNull('gcr_student_id');
                 }
             ]);
+
+            // Sort students by gender (M first, then F) and then by name
+            $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+                $csvData = $student->csv_data ?? [];
+                $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+                $name = $student->student_name;
+                
+                // Sort by gender (M first, then F, then others), then by name
+                $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                return $genderOrder . '_' . $name;
+            })->values();
 
             $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
                 $query->where('subject_id', $subject->id);
@@ -1410,9 +1483,20 @@ class GradeController extends Controller
                     $query->orderBy('term')->orderBy('type')->orderBy('created_at');
                 },
                 'studentMappings' => function ($query) {
-                    $query->orderBy('student_name');
+                    $query->whereNotNull('gcr_student_id');
                 }
             ]);
+
+            // Sort students by gender (M first, then F) and then by name
+            $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+                $csvData = $student->csv_data ?? [];
+                $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+                $name = $student->student_name;
+                
+                // Sort by gender (M first, then F, then others), then by name
+                $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+                return $genderOrder . '_' . $name;
+            })->values();
 
             // Get all activities grouped by term
             $allActivities = $subject->activities->groupBy('term');
@@ -1476,9 +1560,20 @@ class GradeController extends Controller
     {
         $subject->load([
             'studentMappings' => function ($query) {
-                $query->whereNotNull('student_id')->orderBy('student_name');
+                $query->whereNotNull('gcr_student_id');
             }
         ]);
+
+        // Sort students by gender (M first, then F) and then by name
+        $subject->studentMappings = $subject->studentMappings->sortBy(function ($student) {
+            $csvData = $student->csv_data ?? [];
+            $gender = strtoupper($csvData['gender'] ?? 'Z'); // Default 'Z' for unknown gender to sort last
+            $name = $student->student_name;
+            
+            // Sort by gender (M first, then F, then others), then by name
+            $genderOrder = $gender === 'M' ? '1' : ($gender === 'F' ? '2' : '3');
+            return $genderOrder . '_' . $name;
+        })->values();
 
         $termGrades = TermGrade::whereHas('studentMapping', function ($query) use ($subject) {
             $query->where('subject_id', $subject->id);
