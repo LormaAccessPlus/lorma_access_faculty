@@ -30,7 +30,7 @@
 --}}
 
 <!-- Main Navigation Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
     <!-- Subjects -->
     <a href="{{ route('subjects.index') }}" class="text-white rounded-lg p-6 transition-all duration-200 transform hover:scale-105 h-32 flex items-center"
        style="background: linear-gradient(135deg, #08695A, #0A7B6A);"
@@ -61,76 +61,25 @@
         </div>
     </a>
 
-    <!-- Activities -->
-    <a href="{{ route('activities.index') }}" class="text-white rounded-lg p-6 transition-all duration-200 transform hover:scale-105 h-32 flex items-center"
+    <!-- Grading -->
+    <a href="{{ route('grading.index') }}" class="text-white rounded-lg p-6 transition-all duration-200 transform hover:scale-105 h-32 flex items-center"
        style="background: linear-gradient(135deg, #0C8776, #0E9B87);"
        onmouseover="this.style.background='linear-gradient(135deg, #0A7B6A, #0C8776)';"
        onmouseout="this.style.background='linear-gradient(135deg, #0C8776, #0E9B87)';">
         <div class="flex items-center justify-between w-full">
             <div>
-                <h3 class="text-lg font-semibold">Activities</h3>
-                <p class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Assignments & Exams</p>
-                <p class="text-2xl font-bold mt-2">{{ $stats['total_activities'] }}</p>
-            </div>
-            <i class="fas fa-tasks text-3xl" style="color: rgba(255, 255, 255, 0.7);"></i>
-        </div>
-    </a>
-
-    <!-- Student Mapping -->
-    <div class="text-white rounded-lg p-6 transition-all duration-200 transform hover:scale-105 h-32"
-         style="background: linear-gradient(135deg, #0E9B87, #10B398);"
-         onmouseover="this.style.background='linear-gradient(135deg, #0C8776, #0E9B87)';"
-         onmouseout="this.style.background='linear-gradient(135deg, #0E9B87, #10B398)';">
-        <div class="flex items-center justify-between h-full">
-            <div class="flex flex-col justify-center">
-                <h3 class="text-lg font-semibold">Students</h3>
-                <p class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Mapping Status</p>
-                <p class="text-2xl font-bold mt-2">{{ $stats['mapped_students'] }}/{{ $stats['total_mappings'] }}</p>
-            </div>
-            <i class="fas fa-users text-3xl" style="color: rgba(255, 255, 255, 0.7);"></i>
-        </div>
-    </div>
-
-    <!-- Grade Matrix -->
-    <div class="text-white rounded-lg p-6 transition-all duration-200 transform hover:scale-105 h-32"
-         style="background: linear-gradient(135deg, #10B398, #12C5A9);"
-         onmouseover="this.style.background='linear-gradient(135deg, #0E9B87, #10B398)';"
-         onmouseout="this.style.background='linear-gradient(135deg, #10B398, #12C5A9)';">
-        <div class="flex items-center justify-between h-full">
-            <div class="flex flex-col justify-center">
-                <h3 class="text-lg font-semibold">Grades</h3>
-                <p class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Grade Matrix</p>
+                <h3 class="text-lg font-semibold">Grading</h3>
+                <p class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Grade Management</p>
                 <p class="text-2xl font-bold mt-2">
                     @php
-                        $totalGradableActivities = $stats['total_activities'];
-                        $gradeProgress = $totalGradableActivities > 0 ? '✓' : '—';
+                        $gradeProgress = $stats['total_subjects'] > 0 ? '✓' : '—';
                     @endphp
                     {{ $gradeProgress }}
                 </p>
             </div>
             <i class="fas fa-table text-3xl" style="color: rgba(255, 255, 255, 0.7);"></i>
         </div>
-    </div>
-
-    <!-- Grade Synchronization -->
-    <div class="text-white rounded-lg p-6 transition-all duration-200 transform hover:scale-105 h-32"
-         style="background: linear-gradient(135deg, #12C5A9, #14D7BA);"
-         onmouseover="this.style.background='linear-gradient(135deg, #10B398, #12C5A9)';"
-         onmouseout="this.style.background='linear-gradient(135deg, #12C5A9, #14D7BA)';">
-        <div class="flex items-center justify-between h-full">
-            <div class="flex flex-col justify-center">
-                <h3 class="text-lg font-semibold">Sync</h3>
-                <p class="text-sm" style="color: rgba(255, 255, 255, 0.8);">Grade Sync</p>
-                <p class="text-2xl font-bold mt-2">
-                    @php
-                        $syncStatus = $stats['total_subjects'] > 0 ? '🔄' : '—';
-                    @endphp
-                    {{ $syncStatus }}
-                </p>
-            </div>
-            <i class="fas fa-sync-alt text-3xl" style="color: rgba(255, 255, 255, 0.7);"></i>
-        </div>
-    </div>
+    </a>
 </div>
 
 <!-- Stats Grid -->
@@ -191,29 +140,10 @@
             </div>
         </div>
     </div>
-
-    <!-- Student Mappings -->
-    <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-orange-500 rounded-md flex items-center justify-center">
-                        <i class="fas fa-users text-white text-sm"></i>
-                    </div>
-                </div>
-                <div class="ml-5 w-0 flex-1">
-                    <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Mapped Students</dt>
-                        <dd class="text-lg font-medium text-gray-900">{{ $stats['mapped_students'] }}/{{ $stats['total_mappings'] }}</dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Progress Indicators -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+<div class="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
     <!-- GCR Connection Progress -->
     <div class="bg-white shadow rounded-lg p-6">
         <div class="flex items-center justify-between mb-4">
@@ -224,18 +154,6 @@
             <div class="bg-purple-600 h-2 rounded-full" style="width: {{ $stats['gcr_connection_rate'] }}%"></div>
         </div>
         <p class="mt-2 text-sm text-gray-600">{{ $stats['connected_subjects'] }} of {{ $stats['total_subjects'] }} subjects connected</p>
-    </div>
-
-    <!-- Student Mapping Progress -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-medium text-gray-900">Student Mapping Progress</h3>
-            <span class="text-sm font-medium text-gray-500">{{ $stats['mapping_completion_rate'] }}%</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2">
-            <div class="bg-orange-600 h-2 rounded-full" style="width: {{ $stats['mapping_completion_rate'] }}%"></div>
-        </div>
-        <p class="mt-2 text-sm text-gray-600">{{ $stats['mapped_students'] }} of {{ $stats['total_mappings'] }} students mapped</p>
     </div>
 </div>
 
@@ -268,47 +186,14 @@
                                             @endif
                                         </div>
                                         <p class="text-sm text-gray-600">{{ $subject->subject_name }}</p>
-                                        <p class="text-xs text-gray-500">Section: {{ $subject->section }} | {{ $subject->activities->count() }} activities | {{ $subject->studentMappings->count() }} students</p>
+                                        <p class="text-xs text-gray-500">Section: {{ $subject->section }} | {{ $subject->activities->count() }} activities</p>
                                     </div>
                                     <div class="flex items-center space-x-2">
-                                        <a href="{{ route('subjects.show', $subject) }}" class="text-blue-600 hover:text-blue-500" title="View Subject">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{{ route('subjects.edit', $subject) }}" class="text-gray-600 hover:text-gray-500" title="Edit Subject">
-                                            <i class="fas fa-edit"></i>
+                                        <a href="{{ route('grading.index') }}" class="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                            <i class="fas fa-table mr-1"></i>
+                                            Grade
                                         </a>
                                     </div>
-                                </div>
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    <a href="{{ route('grades.matrix', $subject) }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200">
-                                        <i class="fas fa-table mr-1"></i>
-                                        Grade Matrix
-                                    </a>
-                                    <a href="{{ route('grades.term', $subject) }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200">
-                                        <i class="fas fa-calendar-alt mr-1"></i>
-                                        Term Grades
-                                    </a>
-                                    <a href="{{ route('mappings.index', $subject) }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-orange-700 bg-orange-100 hover:bg-orange-200">
-                                        <i class="fas fa-users mr-1"></i>
-                                        Students ({{ $subject->studentMappings->count() }})
-                                    </a>
-                                    @if($subject->activities->count() > 0)
-                                        <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-green-700 bg-green-100">
-                                            <i class="fas fa-tasks mr-1"></i>
-                                            {{ $subject->activities->count() }} Activities
-                                        </span>
-                                    @else
-                                        <a href="{{ route('activities.create') }}?subject_id={{ $subject->id }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200">
-                                            <i class="fas fa-plus mr-1"></i>
-                                            Add Activities
-                                        </a>
-                                    @endif
-                                    @if(!$subject->gcr_class_id)
-                                        <a href="{{ route('classroom.index') }}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-purple-700 bg-purple-100 hover:bg-purple-200">
-                                            <i class="fab fa-google mr-1"></i>
-                                            Connect GCR
-                                        </a>
-                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -328,151 +213,18 @@
                 <h3 class="text-lg font-medium text-gray-900">Quick Actions</h3>
             </div>
             <div class="p-6 space-y-3">
-                
+                <a href="{{ route('grading.index') }}" class="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    <i class="fas fa-table mr-2"></i>
+                    Grading
+                </a>
                 <a href="{{ route('classroom.index') }}" class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                     <i class="fab fa-google mr-2"></i>
                     Sync Classroom
                 </a>
-                <a href="{{ route('activities.index') }}" class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i class="fas fa-tasks mr-2"></i>
-                    Manage Activities
+                <a href="{{ route('students.index') }}" class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    <i class="fas fa-users mr-2"></i>
+                    Students
                 </a>
-            </div>
-        </div>
-
-        <!-- Module Navigation -->
-        <div class="bg-white shadow rounded-lg">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">System Modules</h3>
-            </div>
-            <div class="p-6">
-                <div class="grid grid-cols-1 gap-3">
-                    <!-- Subject Management -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                                    <i class="fas fa-book text-white text-sm"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <h4 class="text-sm font-medium text-gray-900">Subject Management</h4>
-                                    <p class="text-xs text-gray-500">Manage your subjects and courses</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-1">
-                                <a href="{{ route('subjects.index') }}" class="text-blue-600 hover:text-blue-500 text-xs" title="View All">
-                                    <i class="fas fa-list"></i>
-                                </a>
-                                
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Google Classroom Integration -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                                    <i class="fab fa-google text-white text-sm"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <h4 class="text-sm font-medium text-gray-900">Google Classroom</h4>
-                                    <p class="text-xs text-gray-500">Sync with Google Classroom</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-1">
-                                <a href="{{ route('classroom.index') }}" class="text-purple-600 hover:text-purple-500 text-xs" title="Manage Integration">
-                                    <i class="fas fa-sync"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Activity Management -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                                    <i class="fas fa-tasks text-white text-sm"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <h4 class="text-sm font-medium text-gray-900">Activities</h4>
-                                    <p class="text-xs text-gray-500">Manage assignments and exams</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-1">
-                                <a href="{{ route('activities.index') }}" class="text-green-600 hover:text-green-500 text-xs" title="View All">
-                                    <i class="fas fa-list"></i>
-                                </a>
-                                <a href="{{ route('activities.create') }}" class="text-green-600 hover:text-green-500 text-xs" title="Create New">
-                                    <i class="fas fa-plus"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Student Mapping -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 bg-orange-500 rounded-md flex items-center justify-center">
-                                    <i class="fas fa-users text-white text-sm"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <h4 class="text-sm font-medium text-gray-900">Student Mapping</h4>
-                                    <p class="text-xs text-gray-500">Map GCR to school students</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-1">
-                                @if($recentSubjects->count() > 0)
-                                    <a href="{{ route('mappings.index', $recentSubjects->first()) }}" class="text-orange-600 hover:text-orange-500 text-xs" title="Manage Mappings">
-                                        <i class="fas fa-link"></i>
-                                    </a>
-                                @endif
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Grade Matrix -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
-                                    <i class="fas fa-table text-white text-sm"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <h4 class="text-sm font-medium text-gray-900">Grade Matrix</h4>
-                                    <p class="text-xs text-gray-500">Input and manage grades</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-1">
-                                @if($recentSubjects->count() > 0)
-                                    <a href="{{ route('grades.matrix', $recentSubjects->first()) }}" class="text-red-600 hover:text-red-500 text-xs" title="Grade Matrix">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                @endif
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Grade Synchronization -->
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 bg-indigo-500 rounded-md flex items-center justify-center">
-                                    <i class="fas fa-sync-alt text-white text-sm"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <h4 class="text-sm font-medium text-gray-900">Grade Synchronization</h4>
-                                    <p class="text-xs text-gray-500">Sync grades to school database</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-1">
-
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 

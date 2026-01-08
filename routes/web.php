@@ -266,6 +266,7 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::post('/component/{componentId}/add-item', [App\Http\Controllers\DynamicGradingController::class, 'addComponentItem'])->name('add-component-item');
         Route::post('/save-grade', [App\Http\Controllers\DynamicGradingController::class, 'saveGrade'])->name('save-grade');
         Route::post('/save-exam-score', [App\Http\Controllers\DynamicGradingController::class, 'saveExamScore'])->name('save-exam-score');
+        Route::post('/save-lecture-lab-exam-score', [App\Http\Controllers\DynamicGradingController::class, 'saveLectureLabExamScore'])->name('save-lecture-lab-exam-score');
         Route::post('/{id}/fetch-scores', [App\Http\Controllers\DynamicGradingController::class, 'fetchScoresFromGCR'])->name('fetch-scores');
         Route::post('/component-item/{itemId}/update-max-score', [App\Http\Controllers\DynamicGradingController::class, 'updateMaxScore'])->name('update-max-score');
         Route::post('/component-item/{itemId}/move-to-component', [App\Http\Controllers\DynamicGradingController::class, 'moveItemToComponent'])->name('move-item-to-component');
@@ -281,6 +282,14 @@ Route::middleware(['auth.faculty'])->group(function () {
         Route::get('/{gradingClassId}/export-term-csv', [App\Http\Controllers\DynamicGradingController::class, 'exportTermCsv'])->name('export-term-csv');
         Route::get('/{gradingClassId}/export-term-pdf', [App\Http\Controllers\DynamicGradingController::class, 'exportTermPdf'])->name('export-term-pdf');
         Route::get('/subject/{subjectId}/export-all-terms-pdf', [App\Http\Controllers\DynamicGradingController::class, 'exportAllTermsPdf'])->name('export-all-terms-pdf');
+    });
+    
+    // Archive Routes
+    Route::prefix('archive')->name('archive.')->group(function () {
+        Route::get('/', [App\Http\Controllers\ArchiveController::class, 'index'])->name('index');
+        Route::get('/{id}', [App\Http\Controllers\ArchiveController::class, 'show'])->name('show');
+        Route::post('/sync-archives', [App\Http\Controllers\ArchiveController::class, 'syncArchives'])->name('sync');
+        Route::post('/sync-unarchives', [App\Http\Controllers\ArchiveController::class, 'syncUnarchives'])->name('sync-unarchives');
     });
     
     // Student Mapping Page (Legacy - keep for now)

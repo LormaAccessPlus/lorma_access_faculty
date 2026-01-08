@@ -5,11 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Subject;
 use App\Models\TermGrade;
 use App\Models\GradeRecord;
+use App\Services\GoogleClassroomService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\Log;
 
 class ArchiveController extends Controller
 {
+    protected $classroomService;
+
+    public function __construct(GoogleClassroomService $classroomService)
+    {
+        $this->classroomService = $classroomService;
+    }
     /**
      * Display list of archived subjects
      */
@@ -360,4 +368,147 @@ class ArchiveController extends Controller
             ], 500);
         }
     }
-}
+
+    /**
+     * Sync archived subjects from Google Classroom
+     */
+    public function syncArchives(Request $request)
+    {
+        try {
+            $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
+            
+            // Get all active subjects connected to Google Classroom
+            $activeSubjects = Subject::where('faculty_id', $faculty->id)
+                ->whereNotNull('gcr_class_id')
+                ->whereNull('archived_at')
+                ->get();
+            
+            $archivedCount = 0;
+            
+            // Authenticate with Google Classroom
+            if (!$this->classroomService->authenticateWithFaculty($faculty)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to authenticate with Google Classroom'
+                ], 500);
+            }
+            
+            foreach ($activeSubjects as $subject) {
+                try {
+                    // Get course details from Google Classroom
+                    $course = $this->classroomService->getCourse($subject->gcr_class_id);
+                    
+                    // Check if course is archived
+                    if ($course && isset($course['course_state']) && $course['course_state'] === 'ARCHIVED') {
+                        // Archive the subject
+                        $subject->update(['archived_at' => now()]);
+                        $archivedCount++;
+                        
+                        Log::info("Archived subject: {$subject->subject_code} (GCR ID: {$subject->gcr_class_id})");
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Could not check course state for {$subject->subject_code}: " . $e->getMessage());
+                    // Continue with other subjects even if one fails
+                    continue;
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'archived_count' => $archivedCount,
+                'message' => $archivedCount > 0 
+                    ? "Successfully archived {$archivedCount} subject(s)" 
+                    : 'No subjects need to be archived'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error syncing archives: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync archives: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Sync unarchived subjects from Google Classroom
+     */
+    public function syncUnarchives(Request $request)
+    {
+        try {
+            $faculty = $request->attributes->get('faculty') ?? auth('faculty')->user();
+            
+            // Get all archived subjects connected to Google Classroom
+            $archivedSubjects = Subject::where('faculty_id', $faculty->id)
+                ->whereNotNull('gcr_class_id')
+                ->whereNotNull('archived_at')
+                ->get();
+            
+            $unarchivedCount = 0;
+            
+            // Authenticate with Google Classroom
+            if (!$this->classroomService->authenticateWithFaculty($faculty)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to authenticate with Google Classroom'
+                ], 500);
+            }
+            
+            foreach ($archivedSubjects as $subject) {
+                try {
+                    // Get course details from Google Classroom
+                    $course = $this->classroomService->getCourse($subject->gcr_class_id);
+                    
+                    // Check if course is active (not archived)
+                    if ($course && isset($course['course_state']) && $course['course_state'] === 'ACTIVE') {
+                        // Unarchive the subject
+                        $subject->update(['archived_at' => null]);
+                        $unarchivedCount++;
+                        
+                        Log::info("Unarchived subject: {$subject->subject_code} (GCR ID: {$subject->gcr_class_id})");
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Could not check course state for {$subject->subject_code}: " . $e->getMessage());
+                    // Continue with other subjects even if one fails
+                    continue;
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'unarchived_count' => $unarchivedCount,
+                'message' => $unarchivedCount > 0 
+                    ? "Successfully unarchived {$unarchivedCount} subject(s)" 
+                    : 'No subjects need to be unarchived'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error syncing unarchives: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync unarchives: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Check if Google Classroom course is archived
+     * TODO: Implement actual Google Classroom API integration
+     */
+    private function checkIfGCRCourseIsArchived($gcrClassId)
+    {
+        // This would use Google Classroom API to check course state
+        // Return true if course is archived, false if active
+        return false;
+    }
+    
+    /**
+     * Check if Google Classroom course is active
+     * TODO: Implement actual Google Classroom API integration  
+     */
+    private function checkIfGCRCourseIsActive($gcrClassId)
+    {
+        // This would use Google Classroom API to check course state
+        // Return true if course is active, false if archived
+        return false;
+    }}

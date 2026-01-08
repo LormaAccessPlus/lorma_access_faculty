@@ -27,6 +27,11 @@
                     <i class="fas fa-sync-alt mr-2"></i>
                     Sync Archives
                 </button>
+                <button onclick="syncUnarchives()" 
+                        class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
+                    <i class="fas fa-undo mr-2"></i>
+                    Sync Unarchives
+                </button>
                 <a href="{{ route('dashboard') }}" 
                    class="inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md bg-white transition-colors"
                    style="border-color: #08695A; color: #08695A;"
@@ -168,6 +173,47 @@ async function syncArchives() {
     } catch (error) {
         console.error('Sync error:', error);
         alert('Error: Failed to sync archives. Please try again.');
+    } finally {
+        // Restore button state
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
+}
+
+async function syncUnarchives() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
+    
+    try {
+        const response = await fetch('{{ route("archive.sync-unarchives") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Show success message
+            if (data.unarchived_count > 0) {
+                alert(`Success! ${data.unarchived_count} subject(s) have been unarchived and restored to active status.`);
+                // Reload the page to remove unarchived subjects from this list
+                window.location.reload();
+            } else {
+                alert('Sync complete! No subjects need to be unarchived.');
+            }
+        } else {
+            alert('Error: ' + (data.message || 'Failed to sync unarchives'));
+        }
+    } catch (error) {
+        console.error('Sync error:', error);
+        alert('Error: Failed to sync unarchives. Please try again.');
     } finally {
         // Restore button state
         button.disabled = false;

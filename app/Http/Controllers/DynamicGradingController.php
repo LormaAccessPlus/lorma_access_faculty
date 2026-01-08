@@ -165,10 +165,18 @@ class DynamicGradingController extends Controller
                 );
             }
 
-            // Save term formula
-            $gradingClass->update([
+            // Save term formula and lecture/lab split
+            $updateData = [
                 'term_formula' => $request->term_formula ? ['formula' => $request->term_formula] : null,
-            ]);
+            ];
+            
+            // Add lecture/lab percentages if this is a lecture_lab subject
+            if ($gradingClass->subject->type === 'lecture_lab') {
+                $updateData['lecture_percentage'] = $request->lecture_percentage ?? 60;
+                $updateData['lab_percentage'] = $request->lab_percentage ?? 40;
+            }
+            
+            $gradingClass->update($updateData);
 
             // Apply same configuration to other terms (Midterm and Finals)
             $subject = $gradingClass->subject;
@@ -399,20 +407,31 @@ class DynamicGradingController extends Controller
         $termGrade = 0;
         
         foreach ($gradingClass->components as $comp) {
-            $grades = StudentGrade::where('student_mapping_id', $request->student_mapping_id)
-                ->whereIn('component_item_id', $comp->items->pluck('id'))
-                ->get();
-            
-            $total = 0;
-            $count = 0;
-            foreach ($grades as $grade) {
-                if ($grade->computed_score !== null) {
-                    $total += $grade->computed_score;
-                    $count++;
+            if ($comp->component_type === 'class_standing' && 
+                $gradingClass->subject->type === 'lecture_lab' && 
+                $gradingClass->lecture_percentage && 
+                $gradingClass->lab_percentage) {
+                
+                // Handle lecture/lab split for class standing components
+                $avg = $this->calculateClassStandingWithLectureLab($comp, $request->student_mapping_id, $gradingClass);
+            } else {
+                // Regular component calculation
+                $grades = StudentGrade::where('student_mapping_id', $request->student_mapping_id)
+                    ->whereIn('component_item_id', $comp->items->pluck('id'))
+                    ->get();
+                
+                $total = 0;
+                $count = 0;
+                foreach ($grades as $grade) {
+                    if ($grade->computed_score !== null) {
+                        $total += $grade->computed_score;
+                        $count++;
+                    }
                 }
+                
+                $avg = $count > 0 ? $total / $count : null;
             }
             
-            $avg = $count > 0 ? $total / $count : null;
             $componentTotals[$comp->id] = $avg;
             
             if ($avg !== null) {
@@ -1383,26 +1402,47 @@ class DynamicGradingController extends Controller
                 $termGradeComponents = [];
                 
                 foreach ($gradingClass->components as $component) {
-                    $componentTotal = 0;
-                    $componentCount = 0;
-                    
-                    foreach ($component->items as $item) {
-                        $grade = $item->grades->where('student_mapping_id', $student->id)->first();
+                    if ($component->component_type === 'class_standing' && 
+                        $gradingClass->subject->type === 'lecture_lab' && 
+                        $gradingClass->lecture_percentage && 
+                        $gradingClass->lab_percentage) {
                         
-                        // Raw score
-                        $row[] = $grade ? ($grade->score ?? '') : '';
-                        
-                        // Computed score
-                        $row[] = $grade ? ($grade->computed_score ?? '') : '';
-                        
-                        if ($grade && $grade->computed_score !== null) {
-                            $componentTotal += $grade->computed_score;
-                            $componentCount++;
+                        // Handle lecture/lab split for class standing components
+                        foreach ($component->items as $item) {
+                            $grade = $item->grades->where('student_mapping_id', $student->id)->first();
+                            
+                            // Raw score
+                            $row[] = $grade ? ($grade->score ?? '') : '';
+                            
+                            // Computed score
+                            $row[] = $grade ? ($grade->computed_score ?? '') : '';
                         }
+                        
+                        $componentAvg = $this->calculateClassStandingWithLectureLab($component, $student->id, $gradingClass);
+                    } else {
+                        // Regular component calculation
+                        $componentTotal = 0;
+                        $componentCount = 0;
+                        
+                        foreach ($component->items as $item) {
+                            $grade = $item->grades->where('student_mapping_id', $student->id)->first();
+                            
+                            // Raw score
+                            $row[] = $grade ? ($grade->score ?? '') : '';
+                            
+                            // Computed score
+                            $row[] = $grade ? ($grade->computed_score ?? '') : '';
+                            
+                            if ($grade && $grade->computed_score !== null) {
+                                $componentTotal += $grade->computed_score;
+                                $componentCount++;
+                            }
+                        }
+                        
+                        // Component average
+                        $componentAvg = $componentCount > 0 ? $componentTotal / $componentCount : null;
                     }
                     
-                    // Component average
-                    $componentAvg = $componentCount > 0 ? $componentTotal / $componentCount : null;
                     $row[] = $componentAvg !== null ? number_format($componentAvg, 2) : '';
                     
                     if ($componentAvg !== null) {
@@ -1556,6 +1596,200 @@ class DynamicGradingController extends Controller
             
             return back()->with('error', 'Failed to export PDF: ' . $e->getMessage());
         }
+    }
+
+    public function saveLectureLabExamScore(Request $request)
+    {
+        $request->validate([
+            'grading_class_id' => 'required|exists:grading_classes,id',
+            'student_mapping_id' => 'required|exists:student_mappings,id',
+            'component_id' => 'required|exists:grading_components,id',
+            'exam_type' => 'required|in:lecture,lab',
+            'exam_score' => 'nullable|numeric|min:0',
+            'exam_max_score' => 'nullable|numeric|min:0',
+        ]);
+
+        $faculty = auth('faculty')->user();
+        $gradingClass = GradingClass::where('id', $request->grading_class_id)
+            ->where('faculty_id', $faculty->id)
+            ->firstOrFail();
+
+        // Only allow this for lecture_lab subjects
+        if ($gradingClass->subject->type !== 'lecture_lab') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This feature is only available for Lecture+Lab subjects.'
+            ], 400);
+        }
+
+        $component = GradingComponent::findOrFail($request->component_id);
+        
+        try {
+            // Get or create the student grade record
+            $studentGrade = StudentGrade::firstOrCreate(
+                [
+                    'grading_class_id' => $gradingClass->id,
+                    'student_mapping_id' => $request->student_mapping_id,
+                    'component_id' => $request->component_id,
+                ],
+                [
+                    'max_score' => $request->exam_max_score ?? 100,
+                ]
+            );
+
+            // Update the appropriate exam score field
+            if ($request->exam_type === 'lecture') {
+                $studentGrade->lecture_exam_score = $request->exam_score;
+            } else {
+                $studentGrade->lab_exam_score = $request->exam_score;
+            }
+
+            // Calculate total exam score and computed score
+            $lectureScore = $studentGrade->lecture_exam_score ?? 0;
+            $labScore = $studentGrade->lab_exam_score ?? 0;
+            $totalScore = $lectureScore + $labScore;
+            $maxScore = ($request->exam_max_score ?? 100) * 2; // Both lecture and lab have same max score
+
+            // Update total exam score
+            $studentGrade->exam_score = $totalScore > 0 ? $totalScore : null;
+
+            // Calculate computed score using the configured formula if both scores exist
+            $computedScore = null;
+            if ($studentGrade->lecture_exam_score !== null && $studentGrade->lab_exam_score !== null) {
+                // Apply lecture/lab split to exam calculation
+                if ($gradingClass->lecture_percentage && $gradingClass->lab_percentage) {
+                    $lectureWeight = $gradingClass->lecture_percentage / 100;
+                    $labWeight = $gradingClass->lab_percentage / 100;
+                    
+                    // Calculate weighted exam score
+                    $weightedScore = ($lectureScore * $lectureWeight) + ($labScore * $labWeight);
+                    
+                    // Apply component formula if exists
+                    if ($component->formula) {
+                        $formula = str_replace(['score', 'total'], [$weightedScore, $request->exam_max_score ?? 100], $component->formula);
+                        try {
+                            $computedScore = eval("return {$formula};");
+                        } catch (\Exception $e) {
+                            // Fallback to percentage if formula fails
+                            $computedScore = ($weightedScore / ($request->exam_max_score ?? 100)) * 100;
+                        }
+                    } else {
+                        // Default to percentage calculation
+                        $computedScore = ($weightedScore / ($request->exam_max_score ?? 100)) * 100;
+                    }
+                } else {
+                    // Fallback: use total score with equal weighting
+                    if ($component->formula) {
+                        $formula = str_replace(['score', 'total'], [$totalScore, $maxScore], $component->formula);
+                        try {
+                            $computedScore = eval("return {$formula};");
+                        } catch (\Exception $e) {
+                            $computedScore = ($totalScore / $maxScore) * 100;
+                        }
+                    } else {
+                        $computedScore = ($totalScore / $maxScore) * 100;
+                    }
+                }
+            }
+
+            $studentGrade->computed_score = $computedScore ? round($computedScore, 2) : null;
+            $studentGrade->save();
+
+            Log::info('Lecture/Lab exam score saved', [
+                'grading_class_id' => $gradingClass->id,
+                'student_mapping_id' => $request->student_mapping_id,
+                'component_id' => $request->component_id,
+                'exam_type' => $request->exam_type,
+                'exam_score' => $request->exam_score,
+                'total_score' => $totalScore,
+                'computed_score' => $computedScore
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'computed_score' => $computedScore ? round($computedScore, 2) : null,
+                'total_score' => $totalScore,
+                'lecture_score' => $studentGrade->lecture_exam_score,
+                'lab_score' => $studentGrade->lab_exam_score,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error saving lecture/lab exam score', [
+                'grading_class_id' => $request->grading_class_id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error saving exam score: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Calculate class standing component with lecture/lab split
+     */
+    private function calculateClassStandingWithLectureLab($component, $studentMappingId, $gradingClass)
+    {
+        // Get all grades for this component
+        $grades = StudentGrade::where('student_mapping_id', $studentMappingId)
+            ->whereIn('component_item_id', $component->items->pluck('id'))
+            ->with('componentItem.activity')
+            ->get();
+
+        // Separate lecture and lab grades
+        $lectureGrades = $grades->filter(function($grade) {
+            return $grade->componentItem && 
+                   $grade->componentItem->activity && 
+                   $grade->componentItem->activity->type === 'lecture';
+        });
+
+        $labGrades = $grades->filter(function($grade) {
+            return $grade->componentItem && 
+                   $grade->componentItem->activity && 
+                   $grade->componentItem->activity->type === 'lab';
+        });
+
+        // Calculate lecture average
+        $lectureTotal = 0;
+        $lectureCount = 0;
+        foreach ($lectureGrades as $grade) {
+            if ($grade->computed_score !== null) {
+                $lectureTotal += $grade->computed_score;
+                $lectureCount++;
+            }
+        }
+        $lectureAvg = $lectureCount > 0 ? $lectureTotal / $lectureCount : 0;
+
+        // Calculate lab average
+        $labTotal = 0;
+        $labCount = 0;
+        foreach ($labGrades as $grade) {
+            if ($grade->computed_score !== null) {
+                $labTotal += $grade->computed_score;
+                $labCount++;
+            }
+        }
+        $labAvg = $labCount > 0 ? $labTotal / $labCount : 0;
+
+        // Apply lecture/lab split percentages
+        $lecturePercentage = $gradingClass->lecture_percentage / 100;
+        $labPercentage = $gradingClass->lab_percentage / 100;
+
+        // Calculate weighted class standing
+        $classStanding = ($lectureAvg * $lecturePercentage) + ($labAvg * $labPercentage);
+
+        Log::info('Class standing calculation with lecture/lab split', [
+            'component_id' => $component->id,
+            'student_mapping_id' => $studentMappingId,
+            'lecture_avg' => $lectureAvg,
+            'lab_avg' => $labAvg,
+            'lecture_percentage' => $gradingClass->lecture_percentage,
+            'lab_percentage' => $gradingClass->lab_percentage,
+            'final_class_standing' => $classStanding
+        ]);
+
+        return $classStanding;
     }
 
 }

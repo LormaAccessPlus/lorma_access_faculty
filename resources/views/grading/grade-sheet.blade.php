@@ -91,6 +91,27 @@
                                 @endif
                             @endforeach
                         </p>
+                        
+                        @if($subject->type === 'lecture_lab' && $gradingClass->lecture_percentage && $gradingClass->lab_percentage)
+                            <div class="mt-3 pt-3 border-t border-gray-200">
+                                <p class="text-xs font-medium text-gray-600 mb-2">
+                                    <i class="fas fa-info-circle text-blue-500 mr-1"></i>
+                                    Class Standing Split (Lecture + Lab)
+                                </p>
+                                <div class="flex items-center gap-4 text-sm">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-chalkboard-teacher text-blue-600 mr-2"></i>
+                                        <span class="font-medium text-gray-700">Lecture:</span>
+                                        <span class="ml-1 text-blue-600 font-semibold">{{ $gradingClass->lecture_percentage }}%</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fas fa-flask text-purple-600 mr-2"></i>
+                                        <span class="font-medium text-gray-700">Lab:</span>
+                                        <span class="ml-1 text-purple-600 font-semibold">{{ $gradingClass->lab_percentage }}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 @else
                     <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -354,18 +375,62 @@
                                 @else
                                     {{-- Special handling for Exam component --}}
                                     @if($component->component_name === 'Exam')
-                                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 border-r border-gray-100" style="min-width: 120px;">
-                                            <div class="font-semibold text-gray-700">Exam Score</div>
-                                            <div class="text-gray-400 mt-1 flex items-center justify-center gap-1">
-                                                <span id="exam-max-score-{{ $component->id }}">/{{ $component->exam_max_score ?? 100 }}</span>
-                                                <button type="button" 
-                                                        onclick="editExamMaxScore({{ $component->id }}, {{ $component->exam_max_score ?? 100 }})"
-                                                        class="text-blue-500 hover:text-blue-700 transition-colors"
-                                                        title="Edit max score">
-                                                    <i class="fas fa-edit text-xs"></i>
-                                                </button>
-                                            </div>
-                                        </th>
+                                        @if($subject->type === 'lecture_lab')
+                                            <!-- Lecture Exam Score -->
+                                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 border-r border-gray-100" style="min-width: 100px;">
+                                                <div class="font-semibold text-blue-700">
+                                                    <i class="fas fa-chalkboard-teacher mr-1"></i>
+                                                    Lecture Exam
+                                                </div>
+                                                <div class="text-gray-400 mt-1 flex items-center justify-center gap-1">
+                                                    <span id="lecture-exam-max-score-{{ $component->id }}">/{{ $component->exam_max_score ?? 100 }}</span>
+                                                    <button type="button" 
+                                                            onclick="editLectureLabExamMaxScore({{ $component->id }}, {{ $component->exam_max_score ?? 100 }}, 'lecture')"
+                                                            class="text-blue-500 hover:text-blue-700 transition-colors"
+                                                            title="Edit lecture exam max score">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </th>
+                                            <!-- Lab Exam Score -->
+                                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 border-r border-gray-100" style="min-width: 100px;">
+                                                <div class="font-semibold text-purple-700">
+                                                    <i class="fas fa-flask mr-1"></i>
+                                                    Lab Exam
+                                                </div>
+                                                <div class="text-gray-400 mt-1 flex items-center justify-center gap-1">
+                                                    <span id="lab-exam-max-score-{{ $component->id }}">/{{ $component->exam_max_score ?? 100 }}</span>
+                                                    <button type="button" 
+                                                            onclick="editLectureLabExamMaxScore({{ $component->id }}, {{ $component->exam_max_score ?? 100 }}, 'lab')"
+                                                            class="text-purple-500 hover:text-purple-700 transition-colors"
+                                                            title="Edit lab exam max score">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </th>
+                                            <!-- Total Exam Score -->
+                                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 border-r border-gray-100" style="min-width: 100px;">
+                                                <div class="font-semibold text-gray-700">Total Exam</div>
+                                                <div class="text-gray-400 mt-1 flex items-center justify-center gap-1">
+                                                    <span>/{{ ($component->exam_max_score ?? 100) * 2 }}</span>
+                                                </div>
+                                            </th>
+                                        @else
+                                            <!-- Regular Exam Score -->
+                                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 border-r border-gray-100" style="min-width: 120px;">
+                                                <div class="font-semibold text-gray-700">Exam Score</div>
+                                                <div class="text-gray-400 mt-1 flex items-center justify-center gap-1">
+                                                    <span id="exam-max-score-{{ $component->id }}">/{{ $component->exam_max_score ?? 100 }}</span>
+                                                    <button type="button" 
+                                                            onclick="editExamMaxScore({{ $component->id }}, {{ $component->exam_max_score ?? 100 }})"
+                                                            class="text-blue-500 hover:text-blue-700 transition-colors"
+                                                            title="Edit max score">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </th>
+                                        @endif
+                                        <!-- Exam Grade (always shown) -->
                                         <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-gray-100 border-r border-gray-200">
                                             {{ $component->component_name }} Grade
                                         </th>
@@ -534,7 +599,17 @@
                                             if ($totalCount > 0) {
                                                 $lecAvg = $lecComponentCount > 0 ? ($lecComponentTotal / $lecComponentCount) : 0;
                                                 $labAvg = $labComponentCount > 0 ? ($labComponentTotal / $labComponentCount) : 0;
-                                                $combinedAvg = (($lecAvg * $lecComponentCount) + ($labAvg * $labComponentCount)) / $totalCount;
+                                                
+                                                // Use configured lecture/lab percentages if available
+                                                if ($gradingClass->lecture_percentage && $gradingClass->lab_percentage) {
+                                                    $lectureWeight = $gradingClass->lecture_percentage / 100;
+                                                    $labWeight = $gradingClass->lab_percentage / 100;
+                                                    $combinedAvg = ($lecAvg * $lectureWeight) + ($labAvg * $labWeight);
+                                                } else {
+                                                    // Fallback to equal weighting based on count
+                                                    $combinedAvg = (($lecAvg * $lecComponentCount) + ($labAvg * $labComponentCount)) / $totalCount;
+                                                }
+                                                
                                                 $termGradeComponents[] = $combinedAvg * ($component->weight_percentage / 100);
                                             }
                                         @endphp
@@ -542,6 +617,9 @@
                                             <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold {{ $totalCount > 0 ? 'bg-blue-600 text-white' : 'text-gray-400' }}">
                                                 @if($totalCount > 0)
                                                     {{ number_format($combinedAvg, 2) }}
+                                                    @if($gradingClass->lecture_percentage && $gradingClass->lab_percentage)
+                                                        <i class="fas fa-balance-scale ml-1 text-xs" title="Using {{ $gradingClass->lecture_percentage }}% Lecture + {{ $gradingClass->lab_percentage }}% Lab split"></i>
+                                                    @endif
                                                 @else
                                                     -
                                                 @endif
@@ -557,21 +635,66 @@
                                                     ->first();
                                                 $examMaxScore = $examGrade->max_score ?? $component->exam_max_score ?? 100;
                                                 $examScore = $examGrade->exam_score ?? null;
+                                                $lectureExamScore = $examGrade->lecture_exam_score ?? null;
+                                                $labExamScore = $examGrade->lab_exam_score ?? null;
                                                 // Use the computed_score from database (which applies the configured formula)
                                                 $examComputedScore = $examGrade->computed_score ?? null;
                                             @endphp
-                                            <td class="px-3 py-4 text-center border-r border-gray-100">
-                                                <input type="number" 
-                                                       class="exam-input w-20 px-2 py-1 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                                                       data-grading-class="{{ $gradingClass->id }}"
-                                                       data-student="{{ $student->id }}"
-                                                       data-component="{{ $component->id }}"
-                                                       value="{{ $examScore ?? '' }}"
-                                                       min="0" 
-                                                       max="{{ $examMaxScore }}"
-                                                       step="0.01"
-                                                       placeholder="0">
-                                            </td>
+                                            
+                                            @if($subject->type === 'lecture_lab')
+                                                <!-- Lecture Exam Score -->
+                                                <td class="px-3 py-4 text-center border-r border-gray-100">
+                                                    <input type="number" 
+                                                           class="lecture-exam-input w-20 px-2 py-1 text-center border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                                                           data-grading-class="{{ $gradingClass->id }}"
+                                                           data-student="{{ $student->id }}"
+                                                           data-component="{{ $component->id }}"
+                                                           value="{{ $lectureExamScore ?? '' }}"
+                                                           min="0" 
+                                                           max="{{ $examMaxScore }}"
+                                                           step="0.01"
+                                                           placeholder="0">
+                                                </td>
+                                                <!-- Lab Exam Score -->
+                                                <td class="px-3 py-4 text-center border-r border-gray-100">
+                                                    <input type="number" 
+                                                           class="lab-exam-input w-20 px-2 py-1 text-center border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
+                                                           data-grading-class="{{ $gradingClass->id }}"
+                                                           data-student="{{ $student->id }}"
+                                                           data-component="{{ $component->id }}"
+                                                           value="{{ $labExamScore ?? '' }}"
+                                                           min="0" 
+                                                           max="{{ $examMaxScore }}"
+                                                           step="0.01"
+                                                           placeholder="0">
+                                                </td>
+                                                <!-- Total Exam Score (calculated) -->
+                                                <td class="px-3 py-4 text-center border-r border-gray-100 bg-gray-50">
+                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold {{ ($lectureExamScore !== null && $labExamScore !== null) ? 'bg-gray-600 text-white' : 'text-gray-400' }}">
+                                                        @if($lectureExamScore !== null && $labExamScore !== null)
+                                                            {{ number_format($lectureExamScore + $labExamScore, 2) }}
+                                                        @else
+                                                            -
+                                                        @endif
+                                                    </span>
+                                                </td>
+                                            @else
+                                                <!-- Regular Exam Score -->
+                                                <td class="px-3 py-4 text-center border-r border-gray-100">
+                                                    <input type="number" 
+                                                           class="exam-input w-20 px-2 py-1 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                                                           data-grading-class="{{ $gradingClass->id }}"
+                                                           data-student="{{ $student->id }}"
+                                                           data-component="{{ $component->id }}"
+                                                           value="{{ $examScore ?? '' }}"
+                                                           min="0" 
+                                                           max="{{ $examMaxScore }}"
+                                                           step="0.01"
+                                                           placeholder="0">
+                                                </td>
+                                            @endif
+                                            
+                                            <!-- Exam Grade (always shown) -->
                                             <td class="px-3 py-4 text-center bg-gray-100 border-r border-gray-200">
                                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold {{ $examComputedScore !== null ? 'bg-blue-600 text-white' : 'text-gray-400' }}">
                                                     @if($examComputedScore !== null)
@@ -892,6 +1015,46 @@ document.querySelectorAll('.exam-input').forEach(input => {
     });
 });
 
+// Auto-save lecture exam scores
+document.querySelectorAll('.lecture-exam-input').forEach(input => {
+    let timeout;
+    input.addEventListener('input', function() {
+        clearTimeout(timeout);
+        this.classList.add('saving');
+        timeout = setTimeout(() => {
+            saveLectureLabExamScore(this, 'lecture');
+        }, 800);
+    });
+    
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            clearTimeout(timeout);
+            this.classList.add('saving');
+            saveLectureLabExamScore(this, 'lecture');
+        }
+    });
+});
+
+// Auto-save lab exam scores
+document.querySelectorAll('.lab-exam-input').forEach(input => {
+    let timeout;
+    input.addEventListener('input', function() {
+        clearTimeout(timeout);
+        this.classList.add('saving');
+        timeout = setTimeout(() => {
+            saveLectureLabExamScore(this, 'lab');
+        }, 800);
+    });
+    
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            clearTimeout(timeout);
+            this.classList.add('saving');
+            saveLectureLabExamScore(this, 'lab');
+        }
+    });
+});
+
 function updateRowTotals(input) {
     const row = input.closest('tr');
     const allInputs = row.querySelectorAll('.grade-input');
@@ -1131,6 +1294,44 @@ function editExamMaxScore(componentId, currentMaxScore) {
     });
 }
 
+function editLectureLabExamMaxScore(componentId, currentMaxScore, examType) {
+    const typeLabel = examType === 'lecture' ? 'Lecture' : 'Lab';
+    const newMaxScore = prompt(`Edit ${typeLabel} exam max score:\n\nCurrent max score: ${currentMaxScore}`, currentMaxScore);
+    
+    if (newMaxScore === null || newMaxScore === '') {
+        return;
+    }
+    
+    const maxScore = parseFloat(newMaxScore);
+    if (isNaN(maxScore) || maxScore <= 0) {
+        alert('Please enter a valid positive number');
+        return;
+    }
+    
+    // Update exam max score via AJAX
+    fetch(`/grading/component/${componentId}/update-exam-max-score`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ exam_max_score: maxScore })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`${typeLabel} exam max score updated successfully!`);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.message || `Failed to update ${typeLabel.toLowerCase()} exam max score`));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert(`Error updating ${typeLabel.toLowerCase()} exam max score`);
+    });
+}
+
 function saveExamScore(input) {
     console.log('Saving exam score...', input.dataset);
     
@@ -1188,6 +1389,102 @@ function saveExamScore(input) {
     })
     .catch(error => {
         console.error('Error saving exam score:', error);
+        alert('Error: ' + error.message);
+        input.classList.remove('saving');
+        input.classList.add('error');
+        setTimeout(() => {
+            input.classList.remove('error');
+        }, 2000);
+    });
+}
+
+function saveLectureLabExamScore(input, type) {
+    console.log(`Saving ${type} exam score...`, input.dataset);
+    
+    const data = {
+        grading_class_id: input.dataset.gradingClass,
+        student_mapping_id: input.dataset.student,
+        component_id: input.dataset.component,
+        exam_type: type,
+        exam_score: input.value || null,
+        exam_max_score: input.max || 100,
+        _token: '{{ csrf_token() }}'
+    };
+    
+    console.log('Data to send:', data);
+
+    fetch('{{ route("grading.save-lecture-lab-exam-score") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            return response.text().then(text => {
+                console.error('Error response:', text);
+                throw new Error('HTTP error ' + response.status);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response data:', data);
+        if (data.success) {
+            input.classList.remove('saving');
+            input.classList.add('saved');
+            
+            // Update the total exam score display
+            const row = input.closest('tr');
+            const lectureInput = row.querySelector('.lecture-exam-input');
+            const labInput = row.querySelector('.lab-exam-input');
+            const totalCell = row.querySelector('td.bg-gray-50 span');
+            
+            if (lectureInput && labInput && totalCell) {
+                const lectureScore = parseFloat(lectureInput.value) || 0;
+                const labScore = parseFloat(labInput.value) || 0;
+                const total = lectureScore + labScore;
+                
+                if (lectureScore > 0 || labScore > 0) {
+                    totalCell.textContent = total.toFixed(2);
+                    totalCell.className = 'inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold bg-gray-600 text-white';
+                } else {
+                    totalCell.textContent = '-';
+                    totalCell.className = 'inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold text-gray-400';
+                }
+            }
+            
+            // Update exam grade if provided
+            if (data.computed_score !== undefined) {
+                const examGradeCell = row.querySelector('td.bg-gray-100 span');
+                if (examGradeCell) {
+                    if (data.computed_score !== null) {
+                        examGradeCell.textContent = parseFloat(data.computed_score).toFixed(2);
+                        examGradeCell.className = 'inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold bg-blue-600 text-white';
+                    } else {
+                        examGradeCell.textContent = '-';
+                        examGradeCell.className = 'inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold text-gray-400';
+                    }
+                }
+            }
+            
+            setTimeout(() => {
+                input.classList.remove('saved');
+            }, 1000);
+        } else {
+            input.classList.remove('saving');
+            input.classList.add('error');
+            alert('Error: ' + (data.message || `Failed to save ${type} exam score`));
+            setTimeout(() => {
+                input.classList.remove('error');
+            }, 2000);
+        }
+    })
+    .catch(error => {
+        console.error(`Error saving ${type} exam score:`, error);
         alert('Error: ' + error.message);
         input.classList.remove('saving');
         input.classList.add('error');

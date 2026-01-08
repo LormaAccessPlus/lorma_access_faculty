@@ -19,6 +19,8 @@ class GradingClass extends Model
         'department',
         'term',
         'term_formula',
+        'lecture_percentage',
+        'lab_percentage',
     ];
 
     protected $casts = [

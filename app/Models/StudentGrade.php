@@ -18,12 +18,16 @@ class StudentGrade extends Model
         'score',
         'computed_score',
         'exam_score',
+        'lecture_exam_score',
+        'lab_exam_score',
     ];
 
     protected $casts = [
         'score' => 'decimal:2',
         'computed_score' => 'decimal:2',
         'exam_score' => 'decimal:2',
+        'lecture_exam_score' => 'decimal:2',
+        'lab_exam_score' => 'decimal:2',
     ];
 
     public function gradingClass(): BelongsTo

@@ -63,6 +63,61 @@
             </div>
         </div>
         
+        <!-- Lecture+Lab Split Configuration (only for lecture_lab subjects) -->
+        @if($gradingClass->subject->type === 'lecture_lab')
+        <div class="bg-yellow-50 border-b border-yellow-200 px-6 py-4">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-info-circle text-yellow-600 text-lg mt-0.5"></i>
+                </div>
+                <div class="ml-3 flex-1">
+                    <h4 class="text-sm font-semibold text-yellow-800 mb-2">
+                        Lecture + Laboratory Subject Configuration
+                    </h4>
+                    <p class="text-sm text-yellow-700 mb-4">
+                        This subject combines lecture and laboratory components. Configure the percentage split for Class Standing components.
+                    </p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-yellow-800 mb-2">
+                                <i class="fas fa-chalkboard-teacher mr-1"></i> Lecture Percentage (%)
+                            </label>
+                            <input type="number" 
+                                   class="block w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 bg-white" 
+                                   name="lecture_percentage" 
+                                   id="lecturePercentage"
+                                   value="{{ $gradingClass->lecture_percentage ?? 60 }}" 
+                                   min="0" 
+                                   max="100" 
+                                   step="0.01"
+                                   onchange="updateLabPercentage()">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-yellow-800 mb-2">
+                                <i class="fas fa-flask mr-1"></i> Laboratory Percentage (%)
+                            </label>
+                            <input type="number" 
+                                   class="block w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 bg-white" 
+                                   name="lab_percentage" 
+                                   id="labPercentage"
+                                   value="{{ $gradingClass->lab_percentage ?? 40 }}" 
+                                   min="0" 
+                                   max="100" 
+                                   step="0.01"
+                                   onchange="updateLecturePercentage()">
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <p class="text-xs text-yellow-600">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            Total must equal 100%. This split applies to Class Standing components only.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+        
         <div class="p-6">
             <div id="componentsContainer" class="space-y-4">
                 @if($gradingClass->components->count() > 0)
@@ -411,6 +466,19 @@ document.addEventListener('input', function(e) {
         updateTotalWeight();
     }
 });
+
+// Lecture/Lab percentage functions
+function updateLabPercentage() {
+    const lecturePercentage = parseFloat(document.getElementById('lecturePercentage').value) || 0;
+    const labPercentage = 100 - lecturePercentage;
+    document.getElementById('labPercentage').value = labPercentage.toFixed(2);
+}
+
+function updateLecturePercentage() {
+    const labPercentage = parseFloat(document.getElementById('labPercentage').value) || 0;
+    const lecturePercentage = 100 - labPercentage;
+    document.getElementById('lecturePercentage').value = lecturePercentage.toFixed(2);
+}
 
 // Form submission
 document.getElementById('configForm').addEventListener('submit', function() {
